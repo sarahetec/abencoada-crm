@@ -16,30 +16,26 @@ const VALID_STATUSES = [
 const VALID_DEVELOPMENTS = ["Dom Parque", "Dom Barueri", "Outro"];
 
 const MESSAGES = [
-  [1, "Primeira abordagem", "Olá! Tudo bem? 😊 Sou assistente da corretora Abençoada.
-   
-       Recebemos seu interesse no empreendimento Dom Parque, em Barueri, e estou entrando em contato para te apresentar esse projeto! 
-  
-       Gostaria de saber: você teria disponibilidade para conhecer o empreendimento esta semana?"],
-  [2, "Cliente interessado", "Olá! Que bom saber do seu interesse! 😊 Para organizar o melhor atendimento, gostaria de entender como prefere conhecer o empreendimento: presencialmente, por videochamada ou por telefone?"],
-  [3, "Não pode visitar", "Olá! Sem problemas! 😊 Podemos conversar por telefone ou WhatsApp para eu te apresentar melhor o projeto. Qual seria o melhor horário para você?"],
-  [4, "Oferecer horários", "Olá! Tenho algumas opções de horário para conversarmos: manhã (9h às 11h), horário de almoço (12h às 14h), tarde (15h às 17h) ou noite (18h às 20h). Qual período funciona melhor para você? Vou confirmar a disponibilidade antes de agendar."],
-  [5, "Prefere WhatsApp", "Olá! Claro! Podemos conversar por aqui mesmo. 😊 Gostaria de reservar alguns minutinhos para apresentar o projeto e entender o que você procura. Você consegue conversar hoje? Qual horário seria melhor?"],
-  [6, "Prefere telefone", "Olá! Perfeito! 😊 Para nossa ligação, você prefere o período da manhã ou da tarde? Assim consigo organizar o melhor horário."],
-  [7, "Prefere videochamada", "Olá! Ótimo! Podemos fazer uma videochamada pelo WhatsApp para apresentar o empreendimento. Qual horário fica melhor para você?"],
-  [8, "Sem tempo", "Olá! Entendo perfeitamente! Podemos fazer uma conversa rápida, de 5 a 10 minutos, só para apresentar os principais pontos. Qual período costuma ser mais tranquilo para você?"],
-  [9, "Pergunta sobre preço", "Olá! Os valores e condições podem variar conforme a opção escolhida. Para te orientar corretamente, podemos organizar uma conversa rápida e entender o que você procura. Qual seria o melhor horário?"],
-  [10, "Pergunta sobre disponibilidade", "Olá! Posso consultar as opções disponíveis para você. A corretora consegue apresentar os planos e verificar as unidades. Podemos conversar hoje para entender melhor o que você procura?"],
-  [11, "Visualizou e não respondeu", "Olá! Tudo bem? Passando para saber se conseguiu ver minha mensagem anterior e se ainda tem interesse em conhecer o Dom Parque. Se preferir, podemos combinar um atendimento rápido, sem compromisso. 😊"],
-  [12, "Segunda tentativa", "Olá! Tudo bem? Estou retomando nosso contato sobre o Dom Parque. Gostaria de saber se ainda tem interesse em conhecer o empreendimento. Podemos conversar por telefone, videochamada ou WhatsApp, como preferir. 😊"],
-  [13, "Vai pensar", "Olá! Claro, fique à vontade para avaliar com calma! 😊 Se ajudar, podemos fazer uma conversa rápida para você conhecer melhor o projeto antes de decidir."],
-  [14, "Outro momento", "Olá! Sem problemas! Podemos combinar para outro dia. Qual dia da próxima semana costuma ser melhor para você?"],
-  [15, "Confirmação de visita", "Olá! 😊 Passando para confirmar nossa visita ao Dom Parque.\n\n📅 Data: [DATA]\n⏰ Horário: [HORÁRIO]\n\nSerá um prazer receber você!"],
-  [16, "Confirmação de atendimento", "Olá! 😊 Confirmando nosso atendimento:\n\n📅 Data: [DATA]\n⏰ Horário: [HORÁRIO]\n📍 Modalidade: [LIGAÇÃO / VIDEOCHAMADA / WHATSAPP]\n\nAté lá!"],
-  [17, "Não conseguiu contato", "Olá! Tudo bem? Tentei entrar em contato, mas não conseguimos conversar. Qual seria o melhor horário para tentar novamente? 😊"],
-  [18, "Convite após conversa", "Olá! Foi muito bom conversar com você! 😊 Que tal agendarmos uma visita para conhecer o Dom Parque pessoalmente? Assim você consegue entender melhor o projeto."],
-  [19, "Interessado, mas indeciso", "Olá! Entendo, é importante avaliar com tranquilidade. Se quiser, posso organizar uma conversa com a corretora para esclarecer suas dúvidas e apresentar as opções disponíveis."],
-  [20, "Encerramento cordial", "Olá! Agradeço pela atenção e pelo tempo! 😊 Se surgir interesse ou alguma dúvida sobre o Dom Parque, fico à disposição. Tenha um ótimo dia!"]
+  [1, "Primeira abordagem", "Olá, [NOME]! Tudo bem? 😊 Sou assistente da corretora Abençoada. Recebemos seu interesse no empreendimento Dom Parque, em Barueri, e estou entrando em contato para te apresentar esse projeto! Gostaria de saber: você teria disponibilidade para conhecer o empreendimento esta semana?"],
+  [2, "Cliente interessado", "Olá, [NOME]! Que bom saber do seu interesse! 😊 Para organizar o melhor atendimento, gostaria de entender como prefere conhecer o empreendimento: presencialmente, por videochamada ou por telefone?"],
+  [3, "Não pode visitar", "Olá, [NOME]! Sem problemas! 😊 Podemos conversar por telefone ou WhatsApp para eu te apresentar melhor o projeto. Qual seria o melhor horário para você?"],
+  [4, "Oferecer horários", "Olá, [NOME]! Tenho algumas opções de horário para conversarmos: manhã (9h às 11h), horário de almoço (12h às 14h), tarde (15h às 17h) ou noite (18h às 20h). Qual período funciona melhor para você? Vou confirmar a disponibilidade antes de agendar."],
+  [5, "Prefere WhatsApp", "Olá, [NOME]! Claro! Podemos conversar por aqui mesmo. 😊 Gostaria de reservar alguns minutinhos para apresentar o projeto e entender o que você procura. Você consegue conversar hoje? Qual horário seria melhor?"],
+  [6, "Prefere telefone", "Olá, [NOME]! Perfeito! 😊 Para nossa ligação, você prefere o período da manhã ou da tarde? Assim consigo organizar o melhor horário."],
+  [7, "Prefere videochamada", "Olá, [NOME]! Ótimo! Podemos fazer uma videochamada pelo WhatsApp para apresentar o empreendimento. Qual horário fica melhor para você?"],
+  [8, "Sem tempo", "Olá, [NOME]! Entendo perfeitamente! Podemos fazer uma conversa rápida, de 5 a 10 minutos, só para apresentar os principais pontos. Qual período costuma ser mais tranquilo para você?"],
+  [9, "Pergunta sobre preço", "Olá, [NOME]! Os valores e condições podem variar conforme a opção escolhida. Para te orientar corretamente, podemos organizar uma conversa rápida e entender o que você procura. Qual seria o melhor horário?"],
+  [10, "Pergunta sobre disponibilidade", "Olá, [NOME]! Posso consultar as opções disponíveis para você. A corretora consegue apresentar os planos e verificar as unidades. Podemos conversar hoje para entender melhor o que você procura?"],
+  [11, "Visualizou e não respondeu", "Olá, [NOME]! Tudo bem? Passando para saber se conseguiu ver minha mensagem anterior e se ainda tem interesse em conhecer o Dom Parque. Se preferir, podemos combinar um atendimento rápido, sem compromisso. 😊"],
+  [12, "Segunda tentativa", "Olá, [NOME]! Tudo bem? Estou retomando nosso contato sobre o Dom Parque. Gostaria de saber se ainda tem interesse em conhecer o empreendimento. Podemos conversar por telefone, videochamada ou WhatsApp, como preferir. 😊"],
+  [13, "Vai pensar", "Olá, [NOME]! Claro, fique à vontade para avaliar com calma! 😊 Se ajudar, podemos fazer uma conversa rápida para você conhecer melhor o projeto antes de decidir."],
+  [14, "Outro momento", "Olá, [NOME]! Sem problemas! Podemos combinar para outro dia. Qual dia da próxima semana costuma ser melhor para você?"],
+  [15, "Confirmação de visita", "Olá, [NOME]! 😊 Passando para confirmar nossa visita ao Dom Parque.\n\n📅 Data: [DATA]\n⏰ Horário: [HORÁRIO]\n\nSerá um prazer receber você!"],
+  [16, "Confirmação de atendimento", "Olá, [NOME]! 😊 Confirmando nosso atendimento:\n\n📅 Data: [DATA]\n⏰ Horário: [HORÁRIO]\n📍 Modalidade: [LIGAÇÃO / VIDEOCHAMADA / WHATSAPP]\n\nAté lá!"],
+  [17, "Não conseguiu contato", "Olá, [NOME]! Tudo bem? Tentei entrar em contato, mas não conseguimos conversar. Qual seria o melhor horário para tentar novamente? 😊"],
+  [18, "Convite após conversa", "Olá, [NOME]! Foi muito bom conversar com você! 😊 Que tal agendarmos uma visita para conhecer o Dom Parque pessoalmente? Assim você consegue entender melhor o projeto."],
+  [19, "Interessado, mas indeciso", "Olá, [NOME]! Entendo, é importante avaliar com tranquilidade. Se quiser, posso organizar uma conversa com a corretora para esclarecer suas dúvidas e apresentar as opções disponíveis."],
+  [20, "Encerramento cordial", "Olá, [NOME]! Agradeço pela atenção e pelo tempo! 😊 Se surgir interesse ou alguma dúvida sobre o Dom Parque, fico à disposição. Tenha um ótimo dia!"]
 ];
 
 const LEADS_PAGE_SIZE = 100;
@@ -88,9 +84,13 @@ const slug = (s) =>
     .replace(/\s+/g, "-");
 
 function getFirstName(fullName) {
-  const clean = sanitizeText(fullName);
+  const clean = sanitizeText(fullName)
+    .replace(/^(sr\.?|sra\.?|dr\.?|dra\.?)\s+/i, "")
+    .replace(/[^a-zA-ZÀ-ÿ\s'-]/g, " ")
+    .trim();
   if (!clean) return "";
   const first = clean.split(/\s+/)[0];
+  if (!first) return "";
   return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
 }
 
@@ -141,13 +141,9 @@ function adaptMessageForLead(msgText, lead) {
   const firstName = getFirstName(lead?.name);
 
   if (firstName) {
-    if (text.includes("[NOME]")) {
-      text = text.replace(/\[NOME\]/g, firstName);
-    } else if (text.startsWith("Olá!")) {
-      text = text.replace(/^Olá!/, `Olá, ${firstName}!`);
-    }
+    text = text.replace(/\[NOME\]/gi, firstName);
   } else {
-    text = text.replace(/,?\s*\[NOME\]/g, "");
+    text = text.replace(/,\s*\[NOME\]/gi, "").replace(/\[NOME\]/gi, "");
   }
 
   if (lead?.development && lead.development !== "Dom Parque") {
@@ -164,24 +160,25 @@ function adaptMessageForLead(msgText, lead) {
   return text;
 }
 
-function buildWhatsAppWebUrl(lead, rawMessage) {
+function buildWhatsAppAppUrl(lead, rawMessage) {
   const digits = phoneDigits(lead?.phone);
   if (!digits || digits.length < 8) {
     return null;
   }
   const fullPhone = digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`;
   const message = adaptMessageForLead(rawMessage, lead);
-  return `https://web.whatsapp.com/send?phone=${fullPhone}&text=${encodeURIComponent(message)}`;
+  return `whatsapp://send?phone=${fullPhone}&text=${encodeURIComponent(message)}`;
 }
 
 function openWhatsAppForLead(lead, msgIndex = 0) {
   const template = MESSAGES[msgIndex]?.[2] || MESSAGES[0][2];
-  const url = buildWhatsAppWebUrl(lead, template);
-  if (!url) {
+  const appUrl = buildWhatsAppAppUrl(lead, template);
+  if (!appUrl) {
     toast("Este contato não possui números suficientes no telefone.");
     return;
   }
-  window.open(url, "_blank", "noopener,noreferrer");
+  // Redireciona diretamente para o protocolo nativo do App WhatsApp (funciona com tela dividida no tablet)
+  window.location.href = appUrl;
 }
 
 function translateSupabaseError(err) {
@@ -487,7 +484,7 @@ function renderLeads() {
                 <td><span class="status ${slug(x.status)}">${esc(x.status)}</span></td>
                 <td>${esc(formatDateBR(x.next_action_date))}</td>
                 <td class="row-actions">
-                  <button type="button" class="table-action wa-inline" data-wa="${esc(x.id)}" title="Abrir conversa no WhatsApp Web">WhatsApp</button>
+                  <button type="button" class="table-action wa-inline" data-wa="${esc(x.id)}" title="Abrir direto no App WhatsApp">WhatsApp</button>
                   <button type="button" class="table-action" data-detail="${esc(x.id)}">Detalhes</button>
                   <button type="button" class="table-action del-inline" data-delete="${esc(x.id)}" title="Excluir permanentemente">Excluir</button>
                 </td>
@@ -517,7 +514,7 @@ function renderMessages() {
           <h3>${esc(m[1])}</h3>
           <p>${esc(m[2])}</p>
           <div class="message-actions">
-            <span class="tiny">O nome do cliente entra automaticamente ao enviar</span>
+            <span class="tiny">[NOME] vira o 1º nome do cliente</span>
             <button type="button" class="secondary" data-copy="${m[0]}">Copiar texto</button>
           </div>
         </article>`
@@ -897,7 +894,7 @@ async function openLeadDetails(id) {
   msgSelect.onchange = updatePreview;
   updatePreview();
 
-  $("detail-whatsapp").textContent = "Abrir WhatsApp Web";
+  $("detail-whatsapp").textContent = "Abrir no App WhatsApp";
   $("detail-whatsapp").onclick = () => {
     const idx = Number(msgSelect.value) || 0;
     openWhatsAppForLead(l, idx);

@@ -145,12 +145,18 @@
         </div>
 
         <div class="leads-summary-bar">
-          <span id="leads-count-label" class="tiny">Carregando contatos...</span>
+          <div class="summary-left">
+            <span id="leads-count-label" class="tiny">Carregando contatos...</span>
+            <button type="button" id="clear-filters-btn" class="text-btn tiny-btn hidden">Limpar filtros</button>
+          </div>
           <button type="button" id="open-import-inline" class="text-btn">↥ Importar Excel / CSV</button>
         </div>
 
         <div class="panel">
           <div id="leads-table" class="table-wrap"></div>
+          <div id="leads-pagination-bar" class="pagination-bar hidden">
+            <button type="button" id="load-more-leads-btn" class="secondary">Carregar mais contatos</button>
+          </div>
         </div>
       </section>
 
@@ -273,12 +279,32 @@
       <button type="button" id="detail-sent" class="primary">Marcar mensagem como enviada</button>
       <button type="button" id="detail-edit" class="secondary">Editar</button>
       <button type="button" id="detail-archive" class="ghost">Arquivar lead</button>
+      <button type="button" id="detail-delete" class="danger-ghost">Excluir permanentemente</button>
     </div>
 
     <div class="history-block">
       <h3>Histórico de atividades</h3>
       <div id="detail-history"></div>
     </div>
+  </dialog>
+
+  <!-- MODAL: CONFIRMAÇÃO DE EXCLUSÃO PERMANENTE -->
+  <dialog id="delete-confirm-dialog">
+    <div class="dialog-heading">
+      <div>
+        <p class="eyebrow">AÇÃO IRREVERSÍVEL</p>
+        <h2>Excluir contato permanentemente?</h2>
+      </div>
+      <button type="button" class="icon-btn" data-close="delete-confirm-dialog" aria-label="Fechar">×</button>
+    </div>
+    <p class="muted">Você está prestes a excluir definitivamente o contato abaixo e <b>todo o seu histórico de atividades</b>. Esta ação não pode ser desfeita.</p>
+    <div id="delete-confirm-summary" class="delete-summary-box"></div>
+    <p class="tiny">Dica: se quiser apenas ocultar o contato da lista ativa mantendo os dados salvos, utilize a opção <b>Arquivar lead</b>.</p>
+    <div class="dialog-actions">
+      <button type="button" class="ghost" data-close="delete-confirm-dialog">Cancelar</button>
+      <button type="button" id="confirm-delete-btn" class="danger">Sim, excluir definitivamente</button>
+    </div>
+    <p id="delete-error" class="error" role="alert"></p>
   </dialog>
 
   <!-- MODAL: IMPORTAÇÃO EM MASSA (EXCEL / CSV) -->
@@ -291,7 +317,7 @@
       <button type="button" class="icon-btn" data-close="import-dialog" aria-label="Fechar">×</button>
     </div>
 
-    <p class="muted tiny">Selecione a planilha <code>Controle_de_Leads_Dom.xlsx</code> ou qualquer arquivo <code>.xlsx</code>, <code>.xls</code> ou <code>.csv</code>. Os dados serão validados antes de gravar no Supabase.</p>
+    <p class="muted tiny">Selecione a planilha <code>Controle_de_Leads_Dom.xlsx</code> ou qualquer arquivo <code>.xlsx</code>, <code>.xls</code> ou <code>.csv</code>. Todos os registros serão verificados contra contatos ativos e arquivados antes da gravação.</p>
 
     <div class="import-controls">
       <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv">
@@ -331,10 +357,9 @@
       </div>
 
       <div class="import-options">
-        <label class="check-label">
-          <input type="checkbox" id="import-skip-duplicates" checked>
-          Ignorar telefones já cadastrados no CRM ou duplicados na planilha
-        </label>
+        <div class="mandatory-rule-box">
+          <strong>✔ Verificação obrigatória de duplicidade ativada:</strong> telefones repetidos na planilha ou já existentes no banco (ativos ou arquivados) serão automaticamente bloqueados para evitar duplicações.
+        </div>
         <label class="check-label">
           <input type="checkbox" id="import-archive-discarded">
           Importar contatos marcados como "Descartado" diretamente como Arquivados
@@ -345,6 +370,7 @@
       <div id="import-preview-table" class="table-wrap preview-table-wrap"></div>
     </div>
 
+    <div id="import-progress-box" class="hidden import-progress"></div>
     <div id="import-report-box" class="hidden import-report"></div>
 
     <div class="dialog-actions">

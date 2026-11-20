@@ -73,7 +73,7 @@ const toast = (msg) => {
   t.textContent = msg;
   t.classList.add("show");
   clearTimeout(t._timer);
-  t._timer = setTimeout(() => t.classList.remove("show"), 3200);
+  t._timer = setTimeout(() => t.classList.remove("show"), 3500);
 };
 
 const slug = (s) =>
@@ -83,22 +83,41 @@ const slug = (s) =>
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, "-");
 
+/**
+ * Extrai e normaliza o telefone brasileiro para 10 ou 11 dígitos nacionais (DDD + número).
+ * Evita duplicação de DDI 55 e remove zeros à esquerda ou múltiplos números na mesma string.
+ */
 function phoneDigits(raw) {
   let text = sanitizeText(raw);
   if (!text) return "";
-  if (text.includes("/")) {
-    text = text.split("/")[0].trim();
-  }
+
+  // Se houver mais de um telefone separado por /, ; ou "ou", pega apenas o primeiro
+  text = text.split(/[\/;]|(?:\s+ou\s+)/i)[0].trim();
+
   let d = text.replace(/\D/g, "");
-  while (d.startsWith("0") && d.length > 10) {
-    d = d.slice(1);
-  }
-  if (d.startsWith("55") && (d.length === 12 || d.length === 13)) {
+  if (!d) return "";
+
+  // Remove prefixo internacional 00 (ex: 005511999999999)
+  if (d.startsWith("00") && d.length >= 12) {
     d = d.slice(2);
   }
-  while (d.startsWith("0") && d.length > 10) {
+
+  // Remove DDI 55 repetido ou único quando seguido de DDD (2 dígitos >= 11) + 8 ou 9 dígitos
+  while (d.startsWith("55") && (d.length === 12 || d.length === 13 || d.length === 14 || d.length === 15)) {
+    const candidate = d.slice(2);
+    const ddd = Number(candidate.slice(0, 2));
+    if (ddd >= 11 && ddd <= 99 && candidate.length >= 10) {
+      d = candidate;
+    } else {
+      break;
+    }
+  }
+
+  // Remove zero à esquerda do DDD (ex: 011999999999 -> 11999999999)
+  if (d.startsWith("0") && (d.length === 11 || d.length === 12)) {
     d = d.slice(1);
   }
+
   return d;
 }
 
@@ -129,20 +148,26 @@ function adaptMessageForLead(msgText, lead) {
 }
 
 function buildWhatsAppUrl(lead, rawMessage) {
-  let digits = phoneDigits(lead?.phone);
-  if (!digits) return null;
-  if (!digits.startsWith("55")) {
-    digits = "55" + digits;
+  const nationalDigits = phoneDigits(lead?.phone);
+  if (!nationalDigits || (nationalDigits.length !== 10 && nationalDigits.length !== 11)) {
+    return null;
   }
+
+  const ddd = Number(nationalDigits.slice(0, 2));
+  if (ddd < 11 || ddd > 99) {
+    return null;
+  }
+
+  const fullInternationalPhone = `55${nationalDigits}`;
   const message = adaptMessageForLead(rawMessage, lead);
-  return `https://api.whatsapp.com/send?phone=${digits}&text=${encodeURIComponent(message)}`;
+  return `https://api.whatsapp.com/send?phone=${fullInternationalPhone}&text=${encodeURIComponent(message)}`;
 }
 
 function openWhatsAppForLead(lead, msgIndex = 0) {
   const template = MESSAGES[msgIndex]?.[2] || MESSAGES[0][2];
   const url = buildWhatsAppUrl(lead, template);
   if (!url) {
-    toast("Telefone inválido para abrir o WhatsApp.");
+    toast(`Telefone inválido ou sem DDD ("${lead?.phone || ""}"). Edite o contato antes de abrir o WhatsApp.`);
     return;
   }
   window.open(url, "_blank", "noopener,noreferrer");
@@ -261,7 +286,6 @@ async function loadLeads(resetPagination = false) {
     const allData = await fetchAllUserLeadsFromDb();
     leads = allData;
 
-    // Mantém apenas IDs selecionados que ainda existem no banco
     const validIds = new Set(leads.map((l) => l.id));
     selectedLeadIds = new Set([...selectedLeadIds].filter((id) => validIds.has(id)));
 
@@ -397,7 +421,6 @@ function renderLeads() {
 
   currentFilteredLeads = filtered;
 
-  // Limpa seleções que não pertencem ao filtro/aba atual (ex.: alternou entre Ativos e Arquivados)
   const filteredIdSet = new Set(filtered.map((x) => x.id));
   selectedLeadIds = new Set([...selectedLeadIds].filter((id) => filteredIdSet.has(id)));
 
@@ -448,7 +471,7 @@ function renderLeads() {
                   <b>${esc(x.name)}</b>
                   ${x.archived ? '<span class="badge-archived">Arquivado</span>' : ""}
                 </td>
-                <td>${esc(x.phone)}</td>
+                <td>${esc(normalizePhoneForStorage(x.phone))}</td>
                 <td>${esc(x.development)}</td>
                 <td><span class="status ${slug(x.status)}">${esc(x.status)}</span></td>
                 <td>${esc(formatDateBR(x.next_action_date))}</td>
@@ -498,7 +521,7 @@ function openLeadForm(lead = null) {
   $("lead-id").value = lead?.id || "";
   $("dialog-title").textContent = lead ? "Editar lead" : "Novo lead";
   $("lead-name").value = lead?.name || "";
-  $("lead-phone").value = lead?.phone || "";
+  $("lead-phone").value = lead ? normalizePhoneForStorage(lead.phone) : "";
   $("lead-development").value = VALID_DEVELOPMENTS.includes(lead?.development)
     ? lead.development
     : "Dom Parque";
@@ -624,7 +647,7 @@ function openDeleteConfirm(leadIds) {
       "Você está prestes a excluir definitivamente o contato abaixo e <b>todo o seu histórico de atividades</b>. Esta ação não pode ser desfeita.";
     $("delete-confirm-summary").innerHTML = `
       <div><strong>Nome:</strong> ${esc(lead.name)}</div>
-      <div><strong>Telefone:</strong> ${esc(lead.phone)}</div>
+      <div><strong>Telefone:</strong> ${esc(normalizePhoneForStorage(lead.phone))}</div>
       <div><strong>Empreendimento:</strong> ${esc(lead.development)}</div>
       <div><strong>Situação atual:</strong> ${lead.archived ? "Arquivado" : "Ativo"} (${esc(lead.status)})</div>
     `;
@@ -637,7 +660,7 @@ function openDeleteConfirm(leadIds) {
       <ul>
         ${targets
           .slice(0, 30)
-          .map((l) => `<li>${esc(l.name)} — ${esc(l.phone)} (${l.archived ? "Arquivado" : "Ativo"})</li>`)
+          .map((l) => `<li>${esc(l.name)} — ${esc(normalizePhoneForStorage(l.phone))} (${l.archived ? "Arquivado" : "Ativo"})</li>`)
           .join("")}
         ${targets.length > 30 ? `<li><i>... e mais ${targets.length - 30} contato(s).</i></li>` : ""}
       </ul>
@@ -837,9 +860,12 @@ async function openLeadDetails(id) {
   if (!selectedLead) return;
   const l = selectedLead;
 
+  const formattedDisplayPhone = normalizePhoneForStorage(l.phone);
+  const waDigitsPreview = phoneDigits(l.phone);
+
   $("detail-name").textContent = l.name;
   $("detail-content").innerHTML = [
-    ["Telefone", l.phone],
+    ["Telefone", waDigitsPreview ? `${formattedDisplayPhone} (WhatsApp: +55 ${waDigitsPreview})` : `${l.phone} (sem DDD válido)`],
     ["Empreendimento", l.development],
     ["Status", l.status],
     ["Preferência", l.preferred_modality || "Não definida"],
@@ -1202,9 +1228,9 @@ function buildPreparedImportList(currentDbLeads) {
     } else if (!name) {
       category = "invalid";
       skipReason = "Nome ausente";
-    } else if (!digits || digits.length < 8) {
+    } else if (!digits || digits.length < 10 || digits.length > 11) {
       category = "invalid";
-      skipReason = "Telefone ausente ou inválido";
+      skipReason = "Telefone ausente ou sem DDD válido";
     } else if (existingMap.has(digits)) {
       const existing = existingMap.get(digits);
       category = "duplicate_db";
@@ -1221,11 +1247,6 @@ function buildPreparedImportList(currentDbLeads) {
       seenInSheet.set(digits, rowNum);
     }
 
-    const phoneWarning =
-      category === "valid" && (digits.length < 10 || digits.length > 11)
-        ? "Conferir DDD/dígitos"
-        : "";
-
     return {
       rowNum,
       name,
@@ -1237,8 +1258,7 @@ function buildPreparedImportList(currentDbLeads) {
       notes,
       archived,
       category,
-      skipReason,
-      phoneWarning
+      skipReason
     };
   });
 }
@@ -1297,8 +1317,6 @@ function updateImportPreview() {
               <td>${
                 item.category !== "valid"
                   ? `<span class="tag-skip">${esc(item.skipReason)}</span>`
-                  : item.phoneWarning
-                  ? `<span class="tag-warn">Válido (${esc(item.phoneWarning)})</span>`
                   : `<span class="tag-ok">Pronto para importar</span>`
               }</td>
             </tr>`
@@ -1642,7 +1660,6 @@ function bindEvents() {
     renderLeads();
   });
 
-  // Eventos da barra de ações em lote
   $("bulk-select-all-filtered").addEventListener("click", () => {
     for (const item of currentFilteredLeads) {
       selectedLeadIds.add(item.id);
@@ -1662,7 +1679,6 @@ function bindEvents() {
     openDeleteConfirm([...selectedLeadIds]);
   });
 
-  // Delegação de checkboxes na tabela de leads
   $("leads-table").addEventListener("change", (e) => {
     if (e.target.id === "select-all-visible-checkbox") {
       const visibleSlice = currentFilteredLeads.slice(0, visibleLeadsLimit);

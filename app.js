@@ -38,12 +38,16 @@ const MESSAGES = [
   [20, "Encerramento cordial", "Agradeço pela atenção e pelo tempo! 😊 Se surgir interesse ou alguma dúvida sobre o Dom Parque, fico à disposição. Tenha um ótimo dia!"]
 ];
 
+const LEADS_PAGE_SIZE = 100;
+
 let db = null;
 let user = null;
 let leads = [];
 let selectedLead = null;
+let leadPendingDeletion = null;
 let currentWorkbook = null;
 let parsedImportRows = [];
+let visibleLeadsLimit = LEADS_PAGE_SIZE;
 
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({
@@ -60,7 +64,7 @@ const toast = (msg) => {
   t.textContent = msg;
   t.classList.add("show");
   clearTimeout(t._timer);
-  t._timer = setTimeout(() => t.classList.remove("show"), 2800);
+  t._timer = setTimeout(() => t.classList.remove("show"), 3200);
 };
 
 const slug = (s) =>
@@ -70,16 +74,25 @@ const slug = (s) =>
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, "-");
 
+/**
+ * Normaliza telefone brasileiro para comparação de unicidade.
+ * Remove DDI 55, zeros à esquerda, máscaras, espaços e mantém apenas os dígitos nacionais (DDD + número).
+ */
 function phoneDigits(raw) {
-  let d = String(raw || "").replace(/\D/g, "");
-  if (String(raw || "").includes("/")) {
-    const firstPart = String(raw).split("/")[0];
-    d = firstPart.replace(/\D/g, "");
+  let text = String(raw || "").trim();
+  if (!text) return "";
+  if (text.includes("/")) {
+    text = text.split("/")[0].trim();
   }
-  if (d.startsWith("00")) d = d.slice(2);
-  if (d.startsWith("0") && d.length >= 11) d = d.slice(1);
+  let d = text.replace(/\D/g, "");
+  while (d.startsWith("0") && d.length > 10) {
+    d = d.slice(1);
+  }
   if (d.startsWith("55") && (d.length === 12 || d.length === 13)) {
     d = d.slice(2);
+  }
+  while (d.startsWith("0") && d.length > 10) {
+    d = d.slice(1);
   }
   return d;
 }
@@ -176,26 +189,56 @@ async function addHistory(leadId, action, details = "") {
   }
 }
 
-async function loadLeads() {
-  if (!db || !user?.id) return;
-  try {
+/**
+ * Busca TODOS os leads do usuário autenticado (ativos e arquivados) paginando em blocos de 1000
+ * para contornar o limite padrão de 1000 linhas do PostgREST/Supabase.
+ */
+async function fetchAllUserLeadsFromDb() {
+  if (!db || !user?.id) return [];
+  const allRows = [];
+  const pageSize = 1000;
+  let from = 0;
+
+  while (true) {
     const { data, error } = await db
       .from("leads")
       .select("*")
-      .order("created_at", { ascending: false });
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .range(from, from + pageSize - 1);
 
     if (error) {
-      toast("Erro ao carregar contatos: " + translateSupabaseError(error));
-      console.error("Erro loadLeads:", error);
-      return;
+      throw error;
     }
 
-    leads = Array.isArray(data) ? data : [];
+    if (!data || data.length === 0) {
+      break;
+    }
+
+    allRows.push(...data);
+
+    if (data.length < pageSize) {
+      break;
+    }
+    from += pageSize;
+  }
+
+  return allRows;
+}
+
+async function loadLeads(resetPagination = false) {
+  if (!db || !user?.id) return;
+  try {
+    const allData = await fetchAllUserLeadsFromDb();
+    leads = allData;
+    if (resetPagination) {
+      visibleLeadsLimit = LEADS_PAGE_SIZE;
+    }
     renderDashboard();
     renderLeads();
   } catch (err) {
-    toast("Erro inesperado ao buscar leads.");
-    console.error(err);
+    toast("Erro ao carregar contatos: " + translateSupabaseError(err));
+    console.error("Erro loadLeads:", err);
   }
 }
 
@@ -217,6 +260,7 @@ function switchView(viewName) {
   $("page-title").textContent = titles[viewName] || "Abençoada CRM";
 
   if (viewName === "messages") renderMessages();
+  if (viewName === "leads") renderLeads();
 }
 
 function renderDashboard() {
@@ -276,6 +320,9 @@ function renderLeads() {
   const devFilter = $("development-filter").value;
   const showArchived = $("show-archived").checked;
 
+  const hasAnyFilter = Boolean(q || statusFilter || devFilter);
+  $("clear-filters-btn").classList.toggle("hidden", !hasAnyFilter);
+
   const filtered = leads.filter((x) => {
     if (showArchived ? !x.archived : x.archived) return false;
     if (statusFilter && x.status !== statusFilter) return false;
@@ -291,9 +338,20 @@ function renderLeads() {
 
   const totalActive = leads.filter((x) => !x.archived).length;
   const totalArch = leads.filter((x) => x.archived).length;
-  $("leads-count-label").textContent = `Exibindo ${filtered.length} de ${showArchived ? totalArch + " arquivados" : totalActive + " ativos"}`;
+  const visibleSlice = filtered.slice(0, visibleLeadsLimit);
 
-  $("leads-table").innerHTML = filtered.length
+  $("leads-count-label").textContent =
+    `Exibindo ${visibleSlice.length} de ${filtered.length} filtrado(s) • Total: ${totalActive} ativos e ${totalArch} arquivados`;
+
+  const paginationBar = $("leads-pagination-bar");
+  if (filtered.length > visibleLeadsLimit) {
+    paginationBar.classList.remove("hidden");
+    $("load-more-leads-btn").textContent = `Carregar mais (${filtered.length - visibleLeadsLimit} restantes)`;
+  } else {
+    paginationBar.classList.add("hidden");
+  }
+
+  $("leads-table").innerHTML = visibleSlice.length
     ? `<table>
         <thead>
           <tr>
@@ -306,7 +364,7 @@ function renderLeads() {
           </tr>
         </thead>
         <tbody>
-          ${filtered
+          ${visibleSlice
             .map(
               (x) => `<tr>
                 <td>
@@ -320,6 +378,7 @@ function renderLeads() {
                 <td class="row-actions">
                   <button type="button" class="table-action wa-inline" data-wa="${esc(x.id)}" title="Abrir conversa no WhatsApp">WhatsApp</button>
                   <button type="button" class="table-action" data-detail="${esc(x.id)}">Detalhes</button>
+                  <button type="button" class="table-action del-inline" data-delete="${esc(x.id)}" title="Excluir permanentemente">Excluir</button>
                 </td>
               </tr>`
             )
@@ -401,21 +460,37 @@ async function saveLead(e) {
     return;
   }
 
-  const payload = {
-    user_id: user.id,
-    name,
-    phone: normalizePhoneForStorage(rawPhone),
-    development: $("lead-development").value || "Dom Parque",
-    status: $("lead-status").value || "Pendente",
-    preferred_modality: $("lead-modality").value || null,
-    next_action_date: $("lead-next-date").value || null,
-    notes: $("lead-notes").value.trim() || null
-  };
-
   btn.disabled = true;
-  btn.textContent = "Salvando...";
+  btn.textContent = "Verificando...";
 
   try {
+    // Atualiza lista do banco antes de salvar para evitar duplicidade
+    const latestLeads = await fetchAllUserLeadsFromDb();
+    leads = latestLeads;
+
+    const duplicate = latestLeads.find(
+      (item) => item.id !== id && phoneDigits(item.phone) === digits
+    );
+
+    if (duplicate) {
+      const stateLabel = duplicate.archived ? "arquivado" : "ativo";
+      errEl.textContent = `Já existe um contato ${stateLabel} com este telefone: "${duplicate.name}" (${duplicate.phone}).`;
+      return;
+    }
+
+    btn.textContent = "Salvando...";
+
+    const payload = {
+      user_id: user.id,
+      name,
+      phone: normalizePhoneForStorage(rawPhone),
+      development: $("lead-development").value || "Dom Parque",
+      status: $("lead-status").value || "Pendente",
+      preferred_modality: $("lead-modality").value || null,
+      next_action_date: $("lead-next-date").value || null,
+      notes: $("lead-notes").value.trim() || null
+    };
+
     let result;
     if (id) {
       result = await db
@@ -459,6 +534,86 @@ async function saveLead(e) {
   } finally {
     btn.disabled = false;
     btn.textContent = "Salvar lead";
+  }
+}
+
+function openDeleteConfirm(leadId) {
+  const lead = leads.find((x) => x.id === leadId);
+  if (!lead) return;
+
+  leadPendingDeletion = lead;
+  $("delete-error").textContent = "";
+  $("delete-confirm-summary").innerHTML = `
+    <div><strong>Nome:</strong> ${esc(lead.name)}</div>
+    <div><strong>Telefone:</strong> ${esc(lead.phone)}</div>
+    <div><strong>Empreendimento:</strong> ${esc(lead.development)}</div>
+    <div><strong>Situação atual:</strong> ${lead.archived ? "Arquivado" : "Ativo"} (${esc(lead.status)})</div>
+  `;
+
+  const btn = $("confirm-delete-btn");
+  btn.disabled = false;
+  btn.textContent = "Sim, excluir definitivamente";
+  $("delete-confirm-dialog").showModal();
+}
+
+async function executePermanentDelete() {
+  const errEl = $("delete-error");
+  const btn = $("confirm-delete-btn");
+  errEl.textContent = "";
+
+  if (!db || !user?.id || !leadPendingDeletion?.id) {
+    errEl.textContent = "Contato não selecionado ou sessão expirada.";
+    return;
+  }
+
+  const target = leadPendingDeletion;
+  btn.disabled = true;
+  btn.textContent = "Excluindo...";
+
+  try {
+    // 1. Remove explicitamente o histórico associado (além do ON DELETE CASCADE no banco)
+    const { error: histErr } = await db
+      .from("lead_history")
+      .delete()
+      .eq("lead_id", target.id)
+      .eq("user_id", user.id);
+
+    if (histErr) {
+      throw histErr;
+    }
+
+    // 2. Remove definitivamente o contato da tabela leads restrito ao user_id autenticado
+    const { data: deletedRows, error: delErr } = await db
+      .from("leads")
+      .delete()
+      .eq("id", target.id)
+      .eq("user_id", user.id)
+      .select("id");
+
+    if (delErr) {
+      throw delErr;
+    }
+
+    if (!deletedRows || deletedRows.length === 0) {
+      throw new Error("O contato não pôde ser excluído ou não pertence a este usuário.");
+    }
+
+    $("delete-confirm-dialog").close();
+    const detailDlg = $("detail-dialog");
+    if (detailDlg && detailDlg.open) {
+      detailDlg.close();
+    }
+
+    leadPendingDeletion = null;
+    selectedLead = null;
+    toast(`Contato "${target.name}" excluído permanentemente.`);
+    await loadLeads();
+  } catch (err) {
+    errEl.textContent = "Erro ao excluir contato: " + translateSupabaseError(err);
+    console.error("Erro exclusão permanente:", err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Sim, excluir definitivamente";
   }
 }
 
@@ -518,7 +673,7 @@ async function openLeadDetails(id) {
       $("detail-dialog").close();
       toast("Status atualizado para Mensagem enviada.");
       await loadLeads();
-    } catch (err) {
+    } catch {
       toast("Erro inesperado ao atualizar status.");
     }
   };
@@ -547,9 +702,13 @@ async function openLeadDetails(id) {
       $("detail-dialog").close();
       toast(nextArchived ? "Lead arquivado." : "Lead restaurado para ativos.");
       await loadLeads();
-    } catch (err) {
+    } catch {
       toast("Erro inesperado ao arquivar/restaurar.");
     }
+  };
+
+  $("detail-delete").onclick = () => {
+    openDeleteConfirm(l.id);
   };
 
   $("detail-history").innerHTML = '<p class="tiny">Carregando histórico...</p>';
@@ -560,6 +719,7 @@ async function openLeadDetails(id) {
       .from("lead_history")
       .select("*")
       .eq("lead_id", id)
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(50);
 
@@ -577,7 +737,7 @@ async function openLeadDetails(id) {
         )
         .join("");
     }
-  } catch (err) {
+  } catch {
     $("detail-history").innerHTML = '<p class="tiny">Erro ao carregar histórico.</p>';
   }
 }
@@ -616,12 +776,14 @@ async function runDatabaseDiagnostics() {
     user = userData.user;
     pushCheck("2. Autenticação e Sessão", true, `Autenticado como ${user.email} (ID: ${user.id}).`);
 
-    const { data: readData, error: readErr } = await db.from("leads").select("id").limit(5);
-    if (readErr) {
-      pushCheck("3. Leitura na tabela leads", false, translateSupabaseError(readErr));
-      return;
-    }
-    pushCheck("3. Leitura na tabela leads", true, `Leitura bem-sucedida (${readData.length} registro(s) visíveis nesta amostra).`);
+    const allLeads = await fetchAllUserLeadsFromDb();
+    const activeCount = allLeads.filter((l) => !l.archived).length;
+    const archCount = allLeads.filter((l) => l.archived).length;
+    pushCheck(
+      "3. Leitura completa na tabela leads",
+      true,
+      `Total no banco: ${allLeads.length} contatos (${activeCount} ativos, ${archCount} arquivados).`
+    );
 
     const testPayload = {
       user_id: user.id,
@@ -657,7 +819,7 @@ async function runDatabaseDiagnostics() {
     }
 
     await db.from("leads").delete().eq("id", insData.id).eq("user_id", user.id);
-    pushCheck("6. Limpeza do Teste", true, "Registro temporário de diagnóstico removido automaticamente.");
+    pushCheck("6. Limpeza do Teste (DELETE)", true, "Registro temporário de diagnóstico removido automaticamente.");
   } catch (err) {
     pushCheck("Erro inesperado", false, translateSupabaseError(err));
   } finally {
@@ -666,22 +828,31 @@ async function runDatabaseDiagnostics() {
   }
 }
 
-function openImportDialog() {
+async function openImportDialog() {
   $("import-file-input").value = "";
   $("import-sheet-row").classList.add("hidden");
   $("import-mapping-box").classList.add("hidden");
+  $("import-progress-box").classList.add("hidden");
   $("import-report-box").classList.add("hidden");
   $("confirm-import-btn").classList.add("hidden");
   $("import-error").textContent = "";
   currentWorkbook = null;
   parsedImportRows = [];
   $("import-dialog").showModal();
+
+  // Sincroniza a lista de leads do banco antes mesmo de o usuário selecionar o arquivo
+  try {
+    leads = await fetchAllUserLeadsFromDb();
+  } catch (err) {
+    $("import-error").textContent = "Aviso ao sincronizar contatos existentes: " + translateSupabaseError(err);
+  }
 }
 
 function handleFileUpload(e) {
   const file = e.target.files?.[0];
   $("import-error").textContent = "";
   $("import-report-box").classList.add("hidden");
+  $("import-progress-box").classList.add("hidden");
   if (!file) return;
 
   if (typeof window.XLSX === "undefined") {
@@ -690,7 +861,7 @@ function handleFileUpload(e) {
   }
 
   const reader = new FileReader();
-  reader.onload = (evt) => {
+  reader.onload = async (evt) => {
     try {
       const data = new Uint8Array(evt.target.result);
       currentWorkbook = window.XLSX.read(data, { type: "array" });
@@ -700,6 +871,9 @@ function handleFileUpload(e) {
         $("import-error").textContent = "Nenhuma aba encontrada no arquivo.";
         return;
       }
+
+      // Garante base atualizada do banco (ativos + arquivados) antes de analisar duplicidades
+      leads = await fetchAllUserLeadsFromDb();
 
       const sheetSelect = $("import-sheet-select");
       sheetSelect.innerHTML = sheetNames
@@ -714,7 +888,7 @@ function handleFileUpload(e) {
       sheetSelect.onchange = () => parseSelectedSheet(sheetSelect.value);
       parseSelectedSheet(sheetSelect.value);
     } catch (err) {
-      $("import-error").textContent = "Erro ao ler o arquivo: " + err.message;
+      $("import-error").textContent = "Erro ao ler o arquivo: " + translateSupabaseError(err);
     }
   };
   reader.readAsArrayBuffer(file);
@@ -758,20 +932,31 @@ function parseSelectedSheet(sheetName) {
   updateImportPreview();
 }
 
-function buildPreparedImportList() {
+/**
+ * Classifica cada linha da planilha usando os contatos atualizados do banco (ativos + arquivados).
+ * A verificação de duplicidade é obrigatória e baseada no telefone normalizado.
+ */
+function buildPreparedImportList(currentDbLeads) {
   const colName = $("map-name").value;
   const colPhone = $("map-phone").value;
   const colDev = $("map-dev").value;
   const colPrev = $("map-prev-status").value;
   const colStatus = $("map-status").value;
   const colNotes = $("map-notes").value;
-  const skipDuplicates = $("import-skip-duplicates").checked;
   const archiveDiscarded = $("import-archive-discarded").checked;
 
-  const existingPhones = new Set(leads.map((l) => phoneDigits(l.phone)).filter(Boolean));
-  const seenInBatch = new Set();
+  const existingMap = new Map();
+  for (const item of currentDbLeads) {
+    const d = phoneDigits(item.phone);
+    if (d && !existingMap.has(d)) {
+      existingMap.set(d, item);
+    }
+  }
+
+  const seenInSheet = new Map();
 
   return parsedImportRows.map((row, index) => {
+    const rowNum = index + 2;
     const name = String(row[colName] || "").trim();
     const rawPhone = String(row[colPhone] || "").trim();
     const digits = phoneDigits(rawPhone);
@@ -797,25 +982,41 @@ function buildPreparedImportList() {
 
     const archived = archiveDiscarded && /^descartado$/i.test(prevStatus);
 
+    let category = "valid"; // valid | invalid | duplicate_db | duplicate_sheet
     let skipReason = "";
-    if (!name || !digits) {
-      skipReason = "Nome ou telefone ausente";
-    } else if (skipDuplicates && existingPhones.has(digits)) {
-      skipReason = "Já existe no CRM";
-    } else if (skipDuplicates && seenInBatch.has(digits)) {
-      skipReason = "Telefone duplicado na planilha";
+
+    if (!name && !digits) {
+      category = "invalid";
+      skipReason = "Linha vazia (sem nome e sem telefone)";
+    } else if (!name) {
+      category = "invalid";
+      skipReason = "Nome ausente";
+    } else if (!digits || digits.length < 8) {
+      category = "invalid";
+      skipReason = "Telefone ausente ou inválido";
+    } else if (existingMap.has(digits)) {
+      const existing = existingMap.get(digits);
+      category = "duplicate_db";
+      skipReason = existing.archived
+        ? `Já existe no banco (Arquivado: ${existing.name})`
+        : `Já existe no banco (Ativo: ${existing.name})`;
+    } else if (seenInSheet.has(digits)) {
+      const firstRow = seenInSheet.get(digits);
+      category = "duplicate_sheet";
+      skipReason = `Duplicado na planilha (mesmo telefone da linha ${firstRow})`;
     }
 
-    if (!skipReason && digits) {
-      seenInBatch.add(digits);
+    if (category === "valid") {
+      seenInSheet.set(digits, rowNum);
     }
 
-    const phoneWarning = digits && (digits.length < 10 || digits.length > 11)
-      ? "Telefone fora do padrão (conferir)"
-      : "";
+    const phoneWarning =
+      category === "valid" && (digits.length < 10 || digits.length > 11)
+        ? "Conferir DDD/dígitos"
+        : "";
 
     return {
-      rowNum: index + 2,
+      rowNum,
       name,
       phone: formattedPhone,
       digits,
@@ -824,6 +1025,7 @@ function buildPreparedImportList() {
       prevStatus,
       notes,
       archived,
+      category,
       skipReason,
       phoneWarning
     };
@@ -840,18 +1042,23 @@ function updateImportPreview() {
     return;
   }
 
-  const list = buildPreparedImportList();
-  const ready = list.filter((x) => !x.skipReason);
-  const skipped = list.filter((x) => x.skipReason);
-  const warnings = ready.filter((x) => x.phoneWarning);
+  const list = buildPreparedImportList(leads);
+  const validRows = list.filter((x) => x.category === "valid");
+  const dupDbRows = list.filter((x) => x.category === "duplicate_db");
+  const dupSheetRows = list.filter((x) => x.category === "duplicate_sheet");
+  const invalidRows = list.filter((x) => x.category === "invalid");
+  const archivedTargetRows = validRows.filter((x) => x.archived);
 
-  $("confirm-import-btn").disabled = ready.length === 0;
-  $("confirm-import-btn").textContent = `Importar ${ready.length} contato(s)`;
+  $("confirm-import-btn").disabled = validRows.length === 0;
+  $("confirm-import-btn").textContent = `Importar ${validRows.length} contato(s) válido(s)`;
 
   $("import-preview-stats").innerHTML = `
-    <span class="pill ok">Prontos para importar: <b>${ready.length}</b></span>
-    <span class="pill warn">Ignorados / Duplicados: <b>${skipped.length}</b></span>
-    <span class="pill info">Telefones para conferir: <b>${warnings.length}</b></span>
+    <span class="pill neutral">Identificados na planilha: <b>${list.length}</b></span>
+    <span class="pill ok">Válidos para importar: <b>${validRows.length}</b></span>
+    <span class="pill warn">Já no banco (ativos/arquivados): <b>${dupDbRows.length}</b></span>
+    <span class="pill warn">Duplicados na planilha: <b>${dupSheetRows.length}</b></span>
+    <span class="pill danger">Ignorados (inválidos): <b>${invalidRows.length}</b></span>
+    ${archivedTargetRows.length ? `<span class="pill info">Irão para Arquivados: <b>${archivedTargetRows.length}</b></span>` : ""}
   `;
 
   $("import-preview-table").innerHTML = `
@@ -860,41 +1067,43 @@ function updateImportPreview() {
         <tr>
           <th>Linha</th>
           <th>Nome</th>
-          <th>Telefone</th>
+          <th>Telefone normalizado</th>
           <th>Empreendimento</th>
-          <th>Situação anterior</th>
-          <th>Resultado</th>
+          <th>Destino</th>
+          <th>Status da análise</th>
         </tr>
       </thead>
       <tbody>
         ${list
           .slice(0, 25)
           .map(
-            (item) => `<tr class="${item.skipReason ? "row-muted" : ""}">
+            (item) => `<tr class="${item.category !== "valid" ? "row-muted" : ""}">
               <td>${item.rowNum}</td>
               <td>${esc(item.name || "—")}</td>
               <td>${esc(item.phone || "—")}</td>
               <td>${esc(item.development)}</td>
-              <td>${esc(item.prevStatus || "—")}</td>
+              <td>${item.archived ? "Arquivados" : "Ativos"}</td>
               <td>${
-                item.skipReason
+                item.category !== "valid"
                   ? `<span class="tag-skip">${esc(item.skipReason)}</span>`
                   : item.phoneWarning
-                  ? `<span class="tag-warn">Importar (${esc(item.phoneWarning)})</span>`
-                  : `<span class="tag-ok">Pronto</span>`
+                  ? `<span class="tag-warn">Válido (${esc(item.phoneWarning)})</span>`
+                  : `<span class="tag-ok">Pronto para importar</span>`
               }</td>
             </tr>`
           )
           .join("")}
       </tbody>
     </table>
-    ${list.length > 25 ? `<p class="tiny" style="margin-top:.5rem">Exibindo os primeiros 25 de ${list.length} registros analisados.</p>` : ""}
+    ${list.length > 25 ? `<p class="tiny" style="margin-top:.5rem">Prévia visual limitada às primeiras 25 linhas. <b>Todos os ${validRows.length} contatos válidos</b> serão processados na importação.</p>` : ""}
   `;
 }
 
 async function executeBatchImport() {
   const btn = $("confirm-import-btn");
   const errEl = $("import-error");
+  const progressEl = $("import-progress-box");
+  const reportEl = $("import-report-box");
   errEl.textContent = "";
 
   if (!db || !user?.id) {
@@ -902,75 +1111,146 @@ async function executeBatchImport() {
     return;
   }
 
-  const list = buildPreparedImportList();
-  const toInsert = list.filter((x) => !x.skipReason);
-  const skipped = list.filter((x) => x.skipReason);
-
-  if (!toInsert.length) {
-    errEl.textContent = "Nenhum contato válido para importar.";
-    return;
-  }
-
   btn.disabled = true;
-  btn.textContent = `Importando ${toInsert.length} contatos...`;
+  btn.textContent = "Sincronizando banco de dados...";
+  progressEl.classList.remove("hidden");
+  progressEl.textContent = "Consultando registros existentes no Supabase (ativos e arquivados) antes de iniciar...";
 
   try {
-    const records = toInsert.map((x) => ({
-      user_id: user.id,
-      name: x.name,
-      phone: x.phone,
-      development: x.development,
-      status: x.status,
-      notes: x.notes,
-      archived: x.archived
-    }));
+    // 1. Consulta novamente o banco antes de iniciar a importação
+    const freshLeads = await fetchAllUserLeadsFromDb();
+    leads = freshLeads;
+
+    // 2. Recalcula toda a planilha contra a base atualizada do banco
+    const list = buildPreparedImportList(freshLeads);
+    const toInsert = list.filter((x) => x.category === "valid");
+    const dupDbRows = list.filter((x) => x.category === "duplicate_db");
+    const dupSheetRows = list.filter((x) => x.category === "duplicate_sheet");
+    const invalidRows = list.filter((x) => x.category === "invalid");
+
+    if (!toInsert.length) {
+      progressEl.classList.add("hidden");
+      errEl.textContent = "Nenhum contato novo e válido para importar após verificar o banco de dados.";
+      updateImportPreview();
+      return;
+    }
 
     const chunkSize = 50;
+    const totalChunks = Math.ceil(toInsert.length / chunkSize);
     const insertedAll = [];
+    const failedChunks = [];
 
-    for (let i = 0; i < records.length; i += chunkSize) {
-      const chunk = records.slice(i, i + chunkSize);
-      const { data, error } = await db.from("leads").insert(chunk).select("id, name, development");
-      if (error) {
-        throw error;
-      }
-      if (data) insertedAll.push(...data);
-    }
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+      const start = chunkIndex * chunkSize;
+      const slice = toInsert.slice(start, start + chunkSize);
 
-    if (insertedAll.length) {
-      const historyRows = insertedAll.map((item) => ({
-        lead_id: item.id,
+      progressEl.textContent = `Gravando lote ${chunkIndex + 1} de ${totalChunks} (${insertedAll.length} de ${toInsert.length} contatos salvos)...`;
+      btn.textContent = `Importando lote ${chunkIndex + 1}/${totalChunks}...`;
+
+      const payload = slice.map((x) => ({
         user_id: user.id,
-        action: "Lead importado em lote",
-        details: `Importação via planilha (${item.development})`
+        name: x.name,
+        phone: x.phone,
+        development: x.development,
+        status: x.status,
+        notes: x.notes,
+        archived: x.archived
       }));
-      for (let i = 0; i < historyRows.length; i += chunkSize) {
-        await db.from("lead_history").insert(historyRows.slice(i, i + chunkSize));
+
+      const { data, error } = await db
+        .from("leads")
+        .insert(payload)
+        .select("id, name, development, archived");
+
+      if (error) {
+        failedChunks.push({
+          batchNumber: chunkIndex + 1,
+          startRow: slice[0].rowNum,
+          endRow: slice[slice.length - 1].rowNum,
+          count: slice.length,
+          reason: translateSupabaseError(error)
+        });
+        // Continua processando os próximos lotes sem abortar o relatório final
+        continue;
+      }
+
+      if (data && data.length > 0) {
+        insertedAll.push(...data);
+
+        const historyRows = data.map((item) => ({
+          lead_id: item.id,
+          user_id: user.id,
+          action: "Lead importado em lote",
+          details: `Importação via planilha (${item.development}${item.archived ? " - Arquivado" : ""})`
+        }));
+
+        const { error: histErr } = await db.from("lead_history").insert(historyRows);
+        if (histErr) {
+          console.warn(`Aviso no histórico do lote ${chunkIndex + 1}:`, histErr.message);
+        }
       }
     }
 
+    // Recarrega todos os contatos do banco após concluir os lotes
+    await loadLeads(true);
+
+    progressEl.classList.add("hidden");
     $("import-mapping-box").classList.add("hidden");
     $("confirm-import-btn").classList.add("hidden");
-    $("import-report-box").classList.remove("hidden");
-    $("import-report-box").innerHTML = `
-      <h3>Relatório de Importação Concluída</h3>
+
+    const importedActiveCount = insertedAll.filter((x) => !x.archived).length;
+    const importedArchivedCount = insertedAll.filter((x) => x.archived).length;
+    const hasBatchErrors = failedChunks.length > 0;
+
+    reportEl.className = hasBatchErrors ? "import-report partial-warn" : "import-report";
+    reportEl.classList.remove("hidden");
+
+    reportEl.innerHTML = `
+      <h3>${hasBatchErrors ? "⚠️ Importação Concluída com Alertas de Lote" : "✔ Relatório Final de Importação"}</h3>
       <ul>
-        <li><b>Total analisado na planilha:</b> ${list.length}</li>
-        <li><b>Contatos gravados no Supabase:</b> ${insertedAll.length}</li>
-        <li><b>Ignorados (duplicados ou incompletos):</b> ${skipped.length}</li>
+        <li><b>Total de linhas identificadas na planilha:</b> ${list.length}</li>
+        <li><b>Contatos válidos aptos para importar:</b> ${toInsert.length}</li>
+        <li><b>Contatos gravados com sucesso no Supabase:</b> ${insertedAll.length} (${importedActiveCount} ativos e ${importedArchivedCount} arquivados)</li>
+        <li><b>Duplicados já existentes no banco (ativos ou arquivados):</b> ${dupDbRows.length}</li>
+        <li><b>Duplicados dentro da própria planilha:</b> ${dupSheetRows.length}</li>
+        <li><b>Ignorados por dados ausentes ou inválidos:</b> ${invalidRows.length}</li>
+        ${hasBatchErrors ? `<li><b>Lotes com falha de gravação:</b> ${failedChunks.length} lote(s)</li>` : ""}
       </ul>
       ${
-        skipped.length
-          ? `<details><summary>Ver detalhes dos ${skipped.length} ignorados</summary><ul>${skipped
-              .map((s) => `<li>Linha ${s.rowNum}: ${esc(s.name || "Sem nome")} (${esc(s.phone || "Sem tel.")}) — ${esc(s.skipReason)}</li>`)
-              .join("")}</ul></details>`
+        hasBatchErrors
+          ? `<div class="error" style="margin-bottom:0.75rem">
+              <b>Atenção:</b> Os lotes abaixo falharam e não foram gravados. Os ${insertedAll.length} contatos dos lotes bem-sucedidos já estão salvos com segurança — se você tentar importar esta mesma planilha novamente, eles serão ignorados automaticamente sem duplicar.
+              <ul>
+                ${failedChunks
+                  .map(
+                    (f) => `<li>Lote ${f.batchNumber} (linhas ${f.startRow} a ${f.endRow} — ${f.count} contatos): ${esc(f.reason)}</li>`
+                  )
+                  .join("")}
+              </ul>
+            </div>`
+          : ""
+      }
+      ${
+        dupDbRows.length + dupSheetRows.length + invalidRows.length > 0
+          ? `<details>
+              <summary>Ver detalhes dos ${dupDbRows.length + dupSheetRows.length + invalidRows.length} contatos não importados</summary>
+              <ul>
+                ${[...dupDbRows, ...dupSheetRows, ...invalidRows]
+                  .map(
+                    (s) => `<li>Linha ${s.rowNum}: <b>${esc(s.name || "Sem nome")}</b> (${esc(s.phone || "Sem tel.")}) — ${esc(s.skipReason)}</li>`
+                  )
+                  .join("")}
+              </ul>
+            </details>`
           : ""
       }
     `;
 
-    toast(`${insertedAll.length} contatos importados com sucesso!`);
-    await loadLeads();
+    if (insertedAll.length > 0) {
+      toast(`${insertedAll.length} contato(s) salvos no banco de dados.`);
+    }
   } catch (err) {
+    progressEl.classList.add("hidden");
     errEl.textContent = "Falha durante a importação: " + translateSupabaseError(err);
     console.error("Erro importação:", err);
   } finally {
@@ -1004,8 +1284,8 @@ async function connectSupabase(url, key) {
   const { data, error } = await db.auth.getSession();
   if (error) throw error;
 
-  sessionStorage.setItem("crm_url", cleanUrl);
-  sessionStorage.setItem("crm_key", cleanKey);
+  localStorage.setItem("crm_url", cleanUrl);
+  localStorage.setItem("crm_key", cleanKey);
 
   if (!data?.session) {
     showScreen("login-screen");
@@ -1025,7 +1305,7 @@ async function enterAuthenticatedApp() {
   user = data.user;
   $("user-email").textContent = user.email || "Usuário conectado";
   showScreen("app-screen");
-  await loadLeads();
+  await loadLeads(true);
 }
 
 function bindEvents() {
@@ -1079,6 +1359,8 @@ function bindEvents() {
   });
 
   $("change-supabase-btn").onclick = () => {
+    localStorage.removeItem("crm_url");
+    localStorage.removeItem("crm_key");
     sessionStorage.removeItem("crm_url");
     sessionStorage.removeItem("crm_key");
     showScreen("config-screen");
@@ -1103,15 +1385,43 @@ function bindEvents() {
   $("lead-form").addEventListener("submit", saveLead);
 
   ["lead-search", "status-filter", "development-filter"].forEach((id) => {
-    $(id).addEventListener("input", renderLeads);
-    $(id).addEventListener("change", renderLeads);
+    $(id).addEventListener("input", () => {
+      visibleLeadsLimit = LEADS_PAGE_SIZE;
+      renderLeads();
+    });
+    $(id).addEventListener("change", () => {
+      visibleLeadsLimit = LEADS_PAGE_SIZE;
+      renderLeads();
+    });
   });
-  $("show-archived").addEventListener("change", renderLeads);
+
+  $("show-archived").addEventListener("change", () => {
+    visibleLeadsLimit = LEADS_PAGE_SIZE;
+    renderLeads();
+  });
+
+  $("clear-filters-btn").addEventListener("click", () => {
+    $("lead-search").value = "";
+    $("status-filter").value = "";
+    $("development-filter").value = "";
+    visibleLeadsLimit = LEADS_PAGE_SIZE;
+    renderLeads();
+  });
+
+  $("load-more-leads-btn").addEventListener("click", () => {
+    visibleLeadsLimit += LEADS_PAGE_SIZE;
+    renderLeads();
+  });
 
   const handleTableClick = (e) => {
     const detailBtn = e.target.closest("[data-detail]");
     if (detailBtn) {
       openLeadDetails(detailBtn.dataset.detail);
+      return;
+    }
+    const delBtn = e.target.closest("[data-delete]");
+    if (delBtn) {
+      openDeleteConfirm(delBtn.dataset.delete);
       return;
     }
     const waBtn = e.target.closest("[data-wa]");
@@ -1147,23 +1457,26 @@ function bindEvents() {
   $("open-import-top").onclick = openImportDialog;
   $("open-import-inline").onclick = openImportDialog;
   $("import-file-input").addEventListener("change", handleFileUpload);
-  $("import-skip-duplicates").addEventListener("change", updateImportPreview);
   $("import-archive-discarded").addEventListener("change", updateImportPreview);
   $("confirm-import-btn").addEventListener("click", executeBatchImport);
+
+  $("confirm-delete-btn").addEventListener("click", executePermanentDelete);
 
   $("run-diagnostics-btn").addEventListener("click", runDatabaseDiagnostics);
 }
 
 (async function init() {
   bindEvents();
-  const savedUrl = sessionStorage.getItem("crm_url");
-  const savedKey = sessionStorage.getItem("crm_key");
+  const savedUrl = localStorage.getItem("crm_url") || sessionStorage.getItem("crm_url");
+  const savedKey = localStorage.getItem("crm_key") || sessionStorage.getItem("crm_key");
   if (savedUrl && savedKey) {
     $("supabase-url").value = savedUrl;
     $("supabase-key").value = savedKey;
     try {
       await connectSupabase(savedUrl, savedKey);
     } catch {
+      localStorage.removeItem("crm_url");
+      localStorage.removeItem("crm_key");
       sessionStorage.removeItem("crm_url");
       sessionStorage.removeItem("crm_key");
       showScreen("config-screen");

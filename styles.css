@@ -370,6 +370,66 @@ h2 {
   gap: 0.85rem;
 }
 
+/* Barra de ações em lote */
+.bulk-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  background: #f2e9e1;
+  border: 1px solid #dcc9b8;
+  border-radius: 13px;
+  padding: 0.7rem 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.bulk-info {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  color: var(--brown);
+  font-size: 0.86rem;
+}
+
+.bulk-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.bulk-controls select {
+  padding: 0.52rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 0.83rem;
+}
+
+.bulk-controls button {
+  padding: 0.52rem 0.8rem;
+  font-size: 0.82rem;
+}
+
+.col-check {
+  width: 36px;
+  text-align: center;
+}
+
+.col-check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--brown);
+  cursor: pointer;
+}
+
+tr.row-selected {
+  background: #f9f3ed;
+}
+
 .pagination-bar {
   display: flex;
   justify-content: center;
@@ -613,6 +673,13 @@ dialog::backdrop {
   padding: 0.85rem 1rem;
   margin: 0.85rem 0;
   font-size: 0.88rem;
+  max-height: 210px;
+  overflow-y: auto;
+}
+
+.delete-summary-box ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
 }
 
 .wa-composer {
@@ -935,11 +1002,6 @@ dialog::backdrop {
   .dialog-actions {
     flex-wrap: wrap;
   }
-
-  .dialog-actions button {
-    flex: 1;
-  }
-}
 
   .dialog-actions button {
     flex: 1;

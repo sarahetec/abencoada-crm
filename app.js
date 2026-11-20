@@ -15,6 +15,19 @@ const VALID_STATUSES = [
 
 const VALID_DEVELOPMENTS = ["Dom Parque", "Dom Barueri", "Outro"];
 
+// Lista oficial dos 67 DDDs válidos do Brasil (Anatel)
+const VALID_BR_DDDS = new Set([
+  11, 12, 13, 14, 15, 16, 17, 18, 19,
+  21, 22, 24, 27, 28,
+  31, 32, 33, 34, 35, 37, 38,
+  41, 42, 43, 44, 45, 46, 47, 48, 49,
+  51, 53, 54, 55,
+  61, 62, 63, 64, 65, 66, 67, 68, 69,
+  71, 73, 74, 75, 77, 79,
+  81, 82, 83, 84, 85, 86, 87, 88, 89,
+  91, 92, 93, 94, 95, 96, 97, 98, 99
+]);
+
 const MESSAGES = [
   [1, "Primeira abordagem", "Olá! Tudo bem? 😊 Sou assistente da corretora Abençoada. Recebemos seu interesse no empreendimento Dom Parque, em Barueri, e estou entrando em contato para te apresentar esse projeto! Gostaria de saber: você teria disponibilidade para conhecer o empreendimento esta semana?"],
   [2, "Cliente interessado", "Que bom saber do seu interesse! 😊 Para organizar o melhor atendimento, gostaria de entender como prefere conhecer o empreendimento: presencialmente, por videochamada ou por telefone?"],
@@ -73,7 +86,7 @@ const toast = (msg) => {
   t.textContent = msg;
   t.classList.add("show");
   clearTimeout(t._timer);
-  t._timer = setTimeout(() => t.classList.remove("show"), 4000);
+  t._timer = setTimeout(() => t.classList.remove("show"), 4200);
 };
 
 const slug = (s) =>
@@ -90,10 +103,8 @@ function phoneDigits(raw) {
   let text = sanitizeText(raw);
   if (!text) return "";
 
-  // Se houver mais de um telefone separado por /, ;, | ou "ou", pega apenas o primeiro
   text = text.split(/[\/;|]|(?:\s+ou\s+)/i)[0].trim();
 
-  // Remove notação científica se algum número veio do Excel como 5.51199E+12
   if (/^\d+[.,]\d+e\+\d+$/i.test(text)) {
     const num = Number(text.replace(",", "."));
     if (!Number.isNaN(num)) {
@@ -104,28 +115,32 @@ function phoneDigits(raw) {
   let d = text.replace(/\D/g, "");
   if (!d) return "";
 
-  // Remove prefixo internacional 00 (ex: 005511999999999)
   if (d.startsWith("00") && d.length >= 12) {
     d = d.slice(2);
   }
 
-  // Remove DDI 55 quando o total tiver 12, 13 ou 14 dígitos e os 2 seguintes formarem um DDD válido (11..99)
   while (d.startsWith("55") && d.length >= 12) {
     const candidate = d.slice(2);
     const ddd = Number(candidate.slice(0, 2));
-    if (ddd >= 11 && ddd <= 99 && (candidate.length === 10 || candidate.length === 11 || candidate.startsWith("55"))) {
+    if (VALID_BR_DDDS.has(ddd) && (candidate.length === 10 || candidate.length === 11 || candidate.startsWith("55"))) {
       d = candidate;
     } else {
       break;
     }
   }
 
-  // Remove zero à esquerda do DDD (ex: 011999999999 -> 11999999999)
   if (d.startsWith("0") && (d.length === 11 || d.length === 12)) {
     d = d.slice(1);
   }
 
   return d;
+}
+
+function isValidBrazilianPhone(raw) {
+  const digits = phoneDigits(raw);
+  if (digits.length !== 10 && digits.length !== 11) return false;
+  const ddd = Number(digits.slice(0, 2));
+  return VALID_BR_DDDS.has(ddd);
 }
 
 function normalizePhoneForStorage(raw) {
@@ -155,16 +170,10 @@ function adaptMessageForLead(msgText, lead) {
 }
 
 function buildWhatsAppWebUrl(lead, rawMessage) {
-  const nationalDigits = phoneDigits(lead?.phone);
-  if (!nationalDigits || (nationalDigits.length !== 10 && nationalDigits.length !== 11)) {
+  if (!isValidBrazilianPhone(lead?.phone)) {
     return null;
   }
-
-  const ddd = Number(nationalDigits.slice(0, 2));
-  if (ddd < 11 || ddd > 99) {
-    return null;
-  }
-
+  const nationalDigits = phoneDigits(lead.phone);
   const fullInternationalPhone = `55${nationalDigits}`;
   const message = adaptMessageForLead(rawMessage, lead);
   return {
@@ -177,7 +186,7 @@ function openWhatsAppForLead(lead, msgIndex = 0) {
   const template = MESSAGES[msgIndex]?.[2] || MESSAGES[0][2];
   const result = buildWhatsAppWebUrl(lead, template);
   if (!result) {
-    toast(`Telefone inválido ou incompleto ("${lead?.phone || ""}"). Clique em Detalhes > Editar para corrigir o DDD/número.`);
+    toast(`O telefone "${lead?.phone || ""}" tem DDD inexistente ou está incompleto. Clique em Detalhes > Editar para corrigir.`);
     return;
   }
   toast(`Abrindo WhatsApp Web para +${result.phoneSent}...`);
@@ -474,6 +483,7 @@ function renderLeads() {
           ${visibleSlice
             .map((x) => {
               const isSelected = selectedLeadIds.has(x.id);
+              const phoneOk = isValidBrazilianPhone(x.phone);
               return `<tr class="${isSelected ? "row-selected" : ""}">
                 <td class="col-check">
                   <input type="checkbox" class="lead-row-checkbox" data-select-id="${esc(x.id)}" ${isSelected ? "checked" : ""} aria-label="Selecionar ${esc(x.name)}">
@@ -482,7 +492,10 @@ function renderLeads() {
                   <b>${esc(x.name)}</b>
                   ${x.archived ? '<span class="badge-archived">Arquivado</span>' : ""}
                 </td>
-                <td>${esc(normalizePhoneForStorage(x.phone))}</td>
+                <td>
+                  ${esc(normalizePhoneForStorage(x.phone))}
+                  ${!phoneOk ? '<span class="tag-skip" title="DDD inválido ou número incompleto — edite para corrigir"> ⚠️ DDD inválido</span>' : ""}
+                </td>
                 <td>${esc(x.development)}</td>
                 <td><span class="status ${slug(x.status)}">${esc(x.status)}</span></td>
                 <td>${esc(formatDateBR(x.next_action_date))}</td>
@@ -560,11 +573,12 @@ async function saveLead(e) {
     return;
   }
 
-  const digits = phoneDigits(rawPhone);
-  if (digits.length < 10 || digits.length > 11) {
-    errEl.textContent = "Informe um telefone brasileiro válido com DDD (10 ou 11 dígitos). Ex.: (11) 99999-9999.";
+  if (!isValidBrazilianPhone(rawPhone)) {
+    errEl.textContent = "Informe um telefone brasileiro válido com DDD real (ex.: (11) 99999-9999).";
     return;
   }
+
+  const digits = phoneDigits(rawPhone);
 
   btn.disabled = true;
   btn.textContent = "Verificando...";
@@ -873,15 +887,15 @@ async function openLeadDetails(id) {
 
   const formattedDisplayPhone = normalizePhoneForStorage(l.phone);
   const waDigitsPreview = phoneDigits(l.phone);
-  const isPhoneValid = waDigitsPreview.length === 10 || waDigitsPreview.length === 11;
+  const isPhoneValid = isValidBrazilianPhone(l.phone);
 
   $("detail-name").textContent = l.name;
   $("detail-content").innerHTML = [
     [
       "Telefone",
       isPhoneValid
-        ? `${formattedDisplayPhone} → Destino WhatsApp Web: 55${waDigitsPreview}`
-        : `${l.phone} (⚠️ Número inválido — clique em Editar para corrigir DDD/dígitos)`
+        ? `${formattedDisplayPhone} → Destino WhatsApp Web: +55 ${waDigitsPreview}`
+        : `${l.phone} (⚠️ DDD inválido — clique em Editar abaixo para corrigir o número)`
     ],
     ["Empreendimento", l.development],
     ["Status", l.status],
@@ -1246,9 +1260,9 @@ function buildPreparedImportList(currentDbLeads) {
     } else if (!name) {
       category = "invalid";
       skipReason = "Nome ausente";
-    } else if (!digits || digits.length < 10 || digits.length > 11) {
+    } else if (!isValidBrazilianPhone(rawPhone)) {
       category = "invalid";
-      skipReason = "Telefone ausente ou sem DDD válido";
+      skipReason = `Telefone ou DDD inválido (${rawPhone || "vazio"})`;
     } else if (existingMap.has(digits)) {
       const existing = existingMap.get(digits);
       category = "duplicate_db";

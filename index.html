@@ -1,12 +1,360 @@
 <!doctype html>
-<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#442914"><title>Abençoada CRM</title><link rel="stylesheet" href="styles.css"></head>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#442914">
+  <title>Abençoada CRM</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Biblioteca SheetJS para leitura nativa de Excel (.xlsx, .xls) e CSV no navegador -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+</head>
 <body>
-<div id="config-screen" class="screen"><section class="config-card"><div class="brand-mark">A</div><p class="eyebrow">CORRETORA ABENÇOADA</p><h1>Vamos conectar seu CRM</h1><p class="muted">O Supabase guardará contatos e histórico na nuvem. Informe as credenciais do projeto.</p><label for="supabase-url">URL do projeto Supabase</label><input id="supabase-url" type="url" placeholder="https://seuprojeto.supabase.co"><label for="supabase-key">Chave publicável (anon/public)</label><input id="supabase-key" type="password" placeholder="Cole a chave publicável"><button id="connect-btn" class="primary full">Conectar</button><p id="config-error" class="error"></p><p class="tiny">Nunca use a chave <b>service_role</b> no navegador.</p></section></div>
-<div id="app-screen" class="app hidden"><aside class="sidebar"><div class="brand"><div class="brand-mark small">A</div><div><strong>Abençoada</strong><span>CRM</span></div></div><nav><button class="nav-btn active" data-view="dashboard">▦ <span>Visão geral</span></button><button class="nav-btn" data-view="leads">♙ <span>Leads</span></button><button class="nav-btn" data-view="messages">✉ <span>Mensagens</span></button></nav><div class="sidebar-bottom"><span id="user-email" class="tiny"></span><button id="logout-btn" class="ghost">Sair da conta</button></div></aside>
-<main class="main"><header class="topbar"><div><p class="eyebrow">CORRETORA ABENÇOADA</p><h1 id="page-title">Visão geral</h1></div><button id="new-lead-top" class="primary">＋ Novo lead</button></header>
-<section id="dashboard-view" class="view"><div class="stats"><article class="stat"><span>Total de leads</span><strong id="stat-total">—</strong></article><article class="stat"><span>Pendentes</span><strong id="stat-pending">—</strong></article><article class="stat"><span>Mensagens enviadas</span><strong id="stat-sent">—</strong></article><article class="stat"><span>Visitas marcadas</span><strong id="stat-visits">—</strong></article></div><div class="panel"><div class="panel-heading"><div><p class="eyebrow">ACOMPANHAMENTO</p><h2>Próximas ações</h2></div><button class="text-btn" data-goto="leads">Ver todos os leads →</button></div><div id="upcoming-list" class="table-wrap"></div></div></section>
-<section id="leads-view" class="view hidden"><div class="toolbar"><input id="lead-search" type="search" placeholder="Pesquisar por nome ou telefone..."><select id="status-filter"><option value="">Todos os status</option><option>Pendente</option><option>Mensagem enviada</option><option>Retornar depois</option><option>Visita marcada</option><option>Visita realizada</option><option>Sem resposta</option><option>Não tem interesse</option><option>Convertido</option></select><select id="development-filter"><option value="">Todos os empreendimentos</option><option>Dom Parque</option><option>Dom Barueri</option></select><label class="check-label"><input id="show-archived" type="checkbox"> Mostrar arquivados</label></div><div class="panel"><div id="leads-table" class="table-wrap"></div></div></section>
-<section id="messages-view" class="view hidden"><p class="muted intro">Pesquise pelo número ou pela situação para encontrar a mensagem.</p><input id="message-search" class="message-search" type="search" placeholder="Ex.: 1, primeira abordagem, sem tempo..."><div id="message-list" class="message-grid"></div></section></main></div>
-<dialog id="lead-dialog"><form id="lead-form" method="dialog"><div class="dialog-heading"><div><p class="eyebrow">CADASTRO</p><h2 id="dialog-title">Novo lead</h2></div><button type="button" class="icon-btn" data-close="lead-dialog">×</button></div><input type="hidden" id="lead-id"><div class="form-grid"><div class="field wide"><label for="lead-name">Nome do cliente *</label><input id="lead-name" required maxlength="140"></div><div class="field"><label for="lead-phone">Telefone com DDD *</label><input id="lead-phone" required placeholder="(11) 99999-9999"></div><div class="field"><label for="lead-development">Empreendimento</label><select id="lead-development"><option>Dom Parque</option><option>Dom Barueri</option><option>Outro</option></select></div><div class="field"><label for="lead-status">Status</label><select id="lead-status"><option>Pendente</option><option>Mensagem enviada</option><option>Retornar depois</option><option>Visita marcada</option><option>Visita realizada</option><option>Sem resposta</option><option>Não tem interesse</option><option>Convertido</option></select></div><div class="field"><label for="lead-modality">Preferência de contato</label><select id="lead-modality"><option value="">Ainda não definida</option><option>Presencial</option><option>Videochamada</option><option>Ligação</option><option>WhatsApp</option></select></div><div class="field"><label for="lead-next-date">Data da próxima ação</label><input id="lead-next-date" type="date"></div><div class="field wide"><label for="lead-notes">Observações</label><textarea id="lead-notes" rows="3"></textarea></div></div><div class="dialog-actions"><button type="button" class="ghost" data-close="lead-dialog">Cancelar</button><button type="submit" class="primary">Salvar lead</button></div><p id="lead-error" class="error"></p></form></dialog>
-<dialog id="detail-dialog"><div class="dialog-heading"><div><p class="eyebrow">DETALHES DO LEAD</p><h2 id="detail-name"></h2></div><button type="button" class="icon-btn" data-close="detail-dialog">×</button></div><div id="detail-content"></div><div class="dialog-actions wrap-actions"><button id="detail-whatsapp" class="whatsapp">Abrir WhatsApp</button><button id="detail-sent" class="primary">Marcar mensagem como enviada</button><button id="detail-edit" class="secondary">Editar</button><button id="detail-archive" class="ghost">Arquivar lead</button></div><div class="history-block"><h3>Histórico</h3><div id="detail-history"></div></div></dialog>
-<div id="toast" class="toast" role="status"></div><script type="module" src="app.js"></script></body></html>
+
+  <!-- TELA 1: CONFIGURAÇÃO DO SUPABASE -->
+  <div id="config-screen" class="screen">
+    <section class="config-card">
+      <div class="brand-mark">A</div>
+      <p class="eyebrow">CORRETORA ABENÇOADA</p>
+      <h1>Conectar ao Supabase</h1>
+      <p class="muted">Informe a URL do projeto e a chave publicável (anon/public) para acessar seus contatos na nuvem.</p>
+      <form id="config-form" novalidate>
+        <label for="supabase-url">URL do projeto Supabase</label>
+        <input id="supabase-url" type="url" placeholder="https://seuprojeto.supabase.co" required>
+        <label for="supabase-key">Chave publicável (anon/public)</label>
+        <input id="supabase-key" type="password" placeholder="Cole a chave publicável (eyJ... ou sb_publishable_...)" required>
+        <button id="connect-btn" type="submit" class="primary full">Conectar</button>
+      </form>
+      <p id="config-error" class="error" role="alert"></p>
+      <p class="tiny">Segurança: nunca insira a chave <b>service_role</b> no navegador.</p>
+    </section>
+  </div>
+
+  <!-- TELA 2: LOGIN DO USUÁRIO -->
+  <div id="login-screen" class="screen hidden">
+    <section class="config-card">
+      <div class="brand-mark">A</div>
+      <p class="eyebrow">CORRETORA ABENÇOADA</p>
+      <h1>Entrar no CRM</h1>
+      <p class="muted">Acesse com seu e-mail e senha cadastrados no Supabase Authentication.</p>
+      <form id="login-form" novalidate>
+        <label for="login-email">E-mail</label>
+        <input id="login-email" type="email" autocomplete="email" required placeholder="corretora@exemplo.com">
+        <label for="login-password">Senha</label>
+        <input id="login-password" type="password" autocomplete="current-password" required placeholder="••••••••">
+        <button id="login-btn" type="submit" class="primary full">Entrar</button>
+      </form>
+      <p id="login-error" class="error" role="alert"></p>
+      <div class="login-footer">
+        <button id="change-supabase-btn" type="button" class="text-btn tiny-btn">← Alterar credenciais do Supabase</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- TELA 3: APLICAÇÃO PRINCIPAL -->
+  <div id="app-screen" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark small">A</div>
+        <div>
+          <strong>Abençoada</strong>
+          <span>CRM</span>
+        </div>
+      </div>
+      <nav aria-label="Navegação principal">
+        <button type="button" class="nav-btn active" data-view="dashboard">▦ <span>Visão geral</span></button>
+        <button type="button" class="nav-btn" data-view="leads">♙ <span>Leads</span></button>
+        <button type="button" class="nav-btn" data-view="messages">✉ <span>Mensagens (20)</span></button>
+        <button type="button" class="nav-btn" data-view="diagnostics">⚙ <span>Diagnóstico DB</span></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <span id="user-email" class="tiny" title="Usuário autenticado"></span>
+        <button type="button" id="logout-btn" class="ghost">Sair da conta</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">CORRETORA ABENÇOADA</p>
+          <h1 id="page-title">Visão geral</h1>
+        </div>
+        <div class="topbar-actions">
+          <button type="button" id="open-import-top" class="secondary">↥ Importar planilha</button>
+          <button type="button" id="new-lead-top" class="primary">＋ Novo lead</button>
+        </div>
+      </header>
+
+      <!-- VIEW: VISÃO GERAL -->
+      <section id="dashboard-view" class="view">
+        <div class="stats">
+          <article class="stat">
+            <span>Total de leads ativos</span>
+            <strong id="stat-total">—</strong>
+          </article>
+          <article class="stat">
+            <span>Pendentes</span>
+            <strong id="stat-pending">—</strong>
+          </article>
+          <article class="stat">
+            <span>Mensagens enviadas</span>
+            <strong id="stat-sent">—</strong>
+          </article>
+          <article class="stat">
+            <span>Visitas marcadas</span>
+            <strong id="stat-visits">—</strong>
+          </article>
+        </div>
+
+        <div class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">ACOMPANHAMENTO</p>
+              <h2>Próximas ações</h2>
+            </div>
+            <button type="button" class="text-btn" data-goto="leads">Ver todos os leads →</button>
+          </div>
+          <div id="upcoming-list" class="table-wrap"></div>
+        </div>
+      </section>
+
+      <!-- VIEW: LEADS -->
+      <section id="leads-view" class="view hidden">
+        <div class="toolbar">
+          <input id="lead-search" type="search" placeholder="Pesquisar por nome ou telefone...">
+          <select id="status-filter" aria-label="Filtrar por status">
+            <option value="">Todos os status</option>
+            <option>Pendente</option>
+            <option>Mensagem enviada</option>
+            <option>Retornar depois</option>
+            <option>Visita marcada</option>
+            <option>Visita realizada</option>
+            <option>Sem resposta</option>
+            <option>Não tem interesse</option>
+            <option>Convertido</option>
+          </select>
+          <select id="development-filter" aria-label="Filtrar por empreendimento">
+            <option value="">Todos os empreendimentos</option>
+            <option>Dom Parque</option>
+            <option>Dom Barueri</option>
+            <option>Outro</option>
+          </select>
+          <label class="check-label">
+            <input id="show-archived" type="checkbox"> Mostrar arquivados
+          </label>
+        </div>
+
+        <div class="leads-summary-bar">
+          <span id="leads-count-label" class="tiny">Carregando contatos...</span>
+          <button type="button" id="open-import-inline" class="text-btn">↥ Importar Excel / CSV</button>
+        </div>
+
+        <div class="panel">
+          <div id="leads-table" class="table-wrap"></div>
+        </div>
+      </section>
+
+      <!-- VIEW: BIBLIOTECA DE MENSAGENS -->
+      <section id="messages-view" class="view hidden">
+        <p class="muted intro">Pesquise pelo número ou pela situação para encontrar a mensagem ideal.</p>
+        <input id="message-search" class="message-search" type="search" placeholder="Ex.: 1, primeira abordagem, sem tempo, visita...">
+        <div id="message-list" class="message-grid"></div>
+      </section>
+
+      <!-- VIEW: DIAGNÓSTICO DO BANCO DE DADOS -->
+      <section id="diagnostics-view" class="view hidden">
+        <div class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">SAÚDE DO SISTEMA</p>
+              <h2>Diagnóstico de Conexão, Sessão e RLS</h2>
+            </div>
+            <button type="button" id="run-diagnostics-btn" class="primary">Executar verificação completa</button>
+          </div>
+          <p class="muted intro">Valida conexão com o projeto Supabase, token do usuário autenticado, leitura na tabela <code>leads</code>, políticas RLS e gravação real com confirmação de persistência (e remoção automática do registro de teste).</p>
+          <div id="diagnostics-results" class="diag-grid">
+            <div class="empty">Clique em "Executar verificação completa" para testar o banco de dados.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MODAL: CADASTRO E EDIÇÃO DE LEAD -->
+  <dialog id="lead-dialog">
+    <form id="lead-form" novalidate>
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">CADASTRO</p>
+          <h2 id="dialog-title">Novo lead</h2>
+        </div>
+        <button type="button" class="icon-btn" data-close="lead-dialog" aria-label="Fechar">×</button>
+      </div>
+      <input type="hidden" id="lead-id">
+      <div class="form-grid">
+        <div class="field wide">
+          <label for="lead-name">Nome do cliente *</label>
+          <input id="lead-name" required maxlength="140" placeholder="Ex.: Maria Oliveira">
+        </div>
+        <div class="field">
+          <label for="lead-phone">Telefone com DDD *</label>
+          <input id="lead-phone" required placeholder="(11) 99999-9999">
+        </div>
+        <div class="field">
+          <label for="lead-development">Empreendimento</label>
+          <select id="lead-development">
+            <option value="Dom Parque">Dom Parque</option>
+            <option value="Dom Barueri">Dom Barueri</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="lead-status">Status</label>
+          <select id="lead-status">
+            <option value="Pendente">Pendente</option>
+            <option value="Mensagem enviada">Mensagem enviada</option>
+            <option value="Retornar depois">Retornar depois</option>
+            <option value="Visita marcada">Visita marcada</option>
+            <option value="Visita realizada">Visita realizada</option>
+            <option value="Sem resposta">Sem resposta</option>
+            <option value="Não tem interesse">Não tem interesse</option>
+            <option value="Convertido">Convertido</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="lead-modality">Preferência de contato</label>
+          <select id="lead-modality">
+            <option value="">Ainda não definida</option>
+            <option value="Presencial">Presencial</option>
+            <option value="Videochamada">Videochamada</option>
+            <option value="Ligação">Ligação</option>
+            <option value="WhatsApp">WhatsApp</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="lead-next-date">Data da próxima ação</label>
+          <input id="lead-next-date" type="date">
+        </div>
+        <div class="field wide">
+          <label for="lead-notes">Observações</label>
+          <textarea id="lead-notes" rows="3" placeholder="Anotações sobre perfil, horário preferido ou histórico anterior..."></textarea>
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="ghost" data-close="lead-dialog">Cancelar</button>
+        <button type="submit" id="save-lead-btn" class="primary">Salvar lead</button>
+      </div>
+      <p id="lead-error" class="error" role="alert"></p>
+    </form>
+  </dialog>
+
+  <!-- MODAL: DETALHES DO LEAD + WHATSAPP + HISTÓRICO -->
+  <dialog id="detail-dialog">
+    <div class="dialog-heading">
+      <div>
+        <p class="eyebrow">DETALHES DO LEAD</p>
+        <h2 id="detail-name"></h2>
+      </div>
+      <button type="button" class="icon-btn" data-close="detail-dialog" aria-label="Fechar">×</button>
+    </div>
+
+    <div id="detail-content"></div>
+
+    <div class="wa-composer">
+      <label for="detail-msg-select">Escolher mensagem para o WhatsApp (abre preenchida, sem envio automático)</label>
+      <div class="wa-composer-row">
+        <select id="detail-msg-select"></select>
+        <button type="button" id="detail-whatsapp" class="whatsapp">Abrir WhatsApp</button>
+      </div>
+      <p id="detail-msg-preview" class="tiny wa-preview"></p>
+    </div>
+
+    <div class="dialog-actions wrap-actions">
+      <button type="button" id="detail-sent" class="primary">Marcar mensagem como enviada</button>
+      <button type="button" id="detail-edit" class="secondary">Editar</button>
+      <button type="button" id="detail-archive" class="ghost">Arquivar lead</button>
+    </div>
+
+    <div class="history-block">
+      <h3>Histórico de atividades</h3>
+      <div id="detail-history"></div>
+    </div>
+  </dialog>
+
+  <!-- MODAL: IMPORTAÇÃO EM MASSA (EXCEL / CSV) -->
+  <dialog id="import-dialog" class="dialog-wide">
+    <div class="dialog-heading">
+      <div>
+        <p class="eyebrow">IMPORTAÇÃO EM LOTE</p>
+        <h2>Importar contatos (Excel ou CSV)</h2>
+      </div>
+      <button type="button" class="icon-btn" data-close="import-dialog" aria-label="Fechar">×</button>
+    </div>
+
+    <p class="muted tiny">Selecione a planilha <code>Controle_de_Leads_Dom.xlsx</code> ou qualquer arquivo <code>.xlsx</code>, <code>.xls</code> ou <code>.csv</code>. Os dados serão validados antes de gravar no Supabase.</p>
+
+    <div class="import-controls">
+      <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv">
+      <div id="import-sheet-row" class="hidden">
+        <label for="import-sheet-select">Aba da planilha</label>
+        <select id="import-sheet-select"></select>
+      </div>
+    </div>
+
+    <div id="import-mapping-box" class="hidden">
+      <h3>Mapeamento de Colunas Detectado</h3>
+      <div class="form-grid mapping-grid">
+        <div class="field">
+          <label for="map-name">Coluna Nome *</label>
+          <select id="map-name"></select>
+        </div>
+        <div class="field">
+          <label for="map-phone">Coluna Telefone *</label>
+          <select id="map-phone"></select>
+        </div>
+        <div class="field">
+          <label for="map-dev">Coluna Empreendimento / Lista</label>
+          <select id="map-dev"></select>
+        </div>
+        <div class="field">
+          <label for="map-prev-status">Coluna Situação Anterior (ex: Status no app)</label>
+          <select id="map-prev-status"></select>
+        </div>
+        <div class="field">
+          <label for="map-status">Coluna Acompanhamento / Status CRM</label>
+          <select id="map-status"></select>
+        </div>
+        <div class="field">
+          <label for="map-notes">Coluna Observações</label>
+          <select id="map-notes"></select>
+        </div>
+      </div>
+
+      <div class="import-options">
+        <label class="check-label">
+          <input type="checkbox" id="import-skip-duplicates" checked>
+          Ignorar telefones já cadastrados no CRM ou duplicados na planilha
+        </label>
+        <label class="check-label">
+          <input type="checkbox" id="import-archive-discarded">
+          Importar contatos marcados como "Descartado" diretamente como Arquivados
+        </label>
+      </div>
+
+      <div id="import-preview-stats" class="import-stats"></div>
+      <div id="import-preview-table" class="table-wrap preview-table-wrap"></div>
+    </div>
+
+    <div id="import-report-box" class="hidden import-report"></div>
+
+    <div class="dialog-actions">
+      <button type="button" class="ghost" data-close="import-dialog">Fechar</button>
+      <button type="button" id="confirm-import-btn" class="primary hidden">Confirmar e importar contatos</button>
+    </div>
+    <p id="import-error" class="error" role="alert"></p>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

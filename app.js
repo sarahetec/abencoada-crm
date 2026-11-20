@@ -16,15 +16,7 @@ const VALID_STATUSES = [
 const VALID_DEVELOPMENTS = ["Dom Parque", "Dom Barueri", "Outro"];
 
 const MESSAGES = [
-  [1, "Primeira abordagem", "Olá, [NOME]! Tudo bem? 😊
-
-Sou assistente da Elisangela, sua corretora *Abençoada*! 🏡
-
-Vi que você demonstrou interesse no *Dom Parque*, em Barueri, e estou entrando em contato para te apresentar melhor o empreendimento.
-
-Posso te ajudar com algumas informações por aqui e, se preferir, podemos organizar uma ligação rápida ou uma visita com a Elisangela.
-
-O que seria melhor para você? 😊"],
+  [1, "Primeira abordagem", "Olá, *[NOME]*! Tudo bem? 😊\n\nSou assistente da Elisangela, sua corretora *Abençoada*! 🏡\n\nVi que você demonstrou interesse no *Dom Parque*, em Barueri, e estou entrando em contato para te apresentar melhor o empreendimento.\n\nPosso te ajudar com algumas informações por aqui e, se preferir, podemos organizar uma ligação com a Elisangela ou agendar uma visita.\n\nO que seria melhor para você? 😊"],
   [2, "Cliente interessado", "Olá, [NOME]! Que bom saber do seu interesse! 😊 Para organizar o melhor atendimento, gostaria de entender como prefere conhecer o empreendimento: presencialmente, por videochamada ou por telefone?"],
   [3, "Não pode visitar", "Olá, [NOME]! Sem problemas! 😊 Podemos conversar por telefone ou WhatsApp para eu te apresentar melhor o projeto. Qual seria o melhor horário para você?"],
   [4, "Oferecer horários", "Olá, [NOME]! Tenho algumas opções de horário para conversarmos: manhã (9h às 11h), horário de almoço (12h às 14h), tarde (15h às 17h) ou noite (18h às 20h). Qual período funciona melhor para você? Vou confirmar a disponibilidade antes de agendar."],

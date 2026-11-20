@@ -152,6 +152,32 @@
           <button type="button" id="open-import-inline" class="text-btn">↥ Importar Excel / CSV</button>
         </div>
 
+        <!-- BARRA DE AÇÕES EM LOTE -->
+        <div id="bulk-actions-bar" class="bulk-bar hidden" role="region" aria-label="Ações para contatos selecionados">
+          <div class="bulk-info">
+            <strong id="bulk-selected-count">0 selecionado(s)</strong>
+            <button type="button" id="bulk-select-all-filtered" class="text-btn tiny-btn hidden">Selecionar todos os filtrados</button>
+            <button type="button" id="bulk-clear-selection" class="text-btn tiny-btn">Desmarcar</button>
+          </div>
+          <div class="bulk-controls">
+            <select id="bulk-status-select" aria-label="Alterar status dos selecionados">
+              <option value="">Alterar status para...</option>
+              <option value="Pendente">Pendente</option>
+              <option value="Mensagem enviada">Mensagem enviada</option>
+              <option value="Retornar depois">Retornar depois</option>
+              <option value="Visita marcada">Visita marcada</option>
+              <option value="Visita realizada">Visita realizada</option>
+              <option value="Sem resposta">Sem resposta</option>
+              <option value="Não tem interesse">Não tem interesse</option>
+              <option value="Convertido">Convertido</option>
+            </select>
+            <button type="button" id="bulk-apply-status-btn" class="secondary">Aplicar status</button>
+            <button type="button" id="bulk-archive-btn" class="secondary">Arquivar</button>
+            <button type="button" id="bulk-restore-btn" class="secondary hidden">Restaurar</button>
+            <button type="button" id="bulk-delete-btn" class="danger-ghost">Excluir</button>
+          </div>
+        </div>
+
         <div class="panel">
           <div id="leads-table" class="table-wrap"></div>
           <div id="leads-pagination-bar" class="pagination-bar hidden">
@@ -288,18 +314,18 @@
     </div>
   </dialog>
 
-  <!-- MODAL: CONFIRMAÇÃO DE EXCLUSÃO PERMANENTE -->
+  <!-- MODAL: CONFIRMAÇÃO DE EXCLUSÃO PERMANENTE (INDIVIDUAL OU EM LOTE) -->
   <dialog id="delete-confirm-dialog">
     <div class="dialog-heading">
       <div>
         <p class="eyebrow">AÇÃO IRREVERSÍVEL</p>
-        <h2>Excluir contato permanentemente?</h2>
+        <h2 id="delete-dialog-title">Excluir contato permanentemente?</h2>
       </div>
       <button type="button" class="icon-btn" data-close="delete-confirm-dialog" aria-label="Fechar">×</button>
     </div>
-    <p class="muted">Você está prestes a excluir definitivamente o contato abaixo e <b>todo o seu histórico de atividades</b>. Esta ação não pode ser desfeita.</p>
+    <p id="delete-dialog-desc" class="muted">Você está prestes a excluir definitivamente o contato abaixo e <b>todo o seu histórico de atividades</b>. Esta ação não pode ser desfeita.</p>
     <div id="delete-confirm-summary" class="delete-summary-box"></div>
-    <p class="tiny">Dica: se quiser apenas ocultar o contato da lista ativa mantendo os dados salvos, utilize a opção <b>Arquivar lead</b>.</p>
+    <p class="tiny">Dica: se quiser apenas ocultar contatos da lista ativa mantendo os dados salvos, utilize a opção <b>Arquivar</b>.</p>
     <div class="dialog-actions">
       <button type="button" class="ghost" data-close="delete-confirm-dialog">Cancelar</button>
       <button type="button" id="confirm-delete-btn" class="danger">Sim, excluir definitivamente</button>

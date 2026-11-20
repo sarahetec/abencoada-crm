@@ -58,6 +58,16 @@ const esc = (s) =>
     "'": "&#39;"
   }[c]));
 
+/**
+ * Remove caracteres nulos (\u0000) e de controle que quebram inserts JSON no PostgreSQL
+ */
+function sanitizeText(val) {
+  return String(val ?? "")
+    .replace(/\u0000/g, "")
+    .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, " ")
+    .trim();
+}
+
 const toast = (msg) => {
   const t = $("toast");
   if (!t) return;
@@ -79,7 +89,7 @@ const slug = (s) =>
  * Remove DDI 55, zeros à esquerda, máscaras, espaços e mantém apenas os dígitos nacionais (DDD + número).
  */
 function phoneDigits(raw) {
-  let text = String(raw || "").trim();
+  let text = sanitizeText(raw);
   if (!text) return "";
   if (text.includes("/")) {
     text = text.split("/")[0].trim();
@@ -105,7 +115,7 @@ function normalizePhoneForStorage(raw) {
   if (digits.length === 10) {
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
   }
-  return String(raw || "").trim();
+  return sanitizeText(raw);
 }
 
 function adaptMessageForLead(msgText, lead) {
@@ -174,14 +184,24 @@ function showScreen(screenId) {
   });
 }
 
+async function ensureActiveUser() {
+  if (!db) throw new Error("Cliente Supabase não inicializado.");
+  const { data, error } = await db.auth.getUser();
+  if (error || !data?.user) {
+    throw new Error("Sessão expirada ou usuário não autenticado. Faça login novamente.");
+  }
+  user = data.user;
+  return user;
+}
+
 async function addHistory(leadId, action, details = "") {
   if (!db || !user?.id || !leadId) return;
   try {
     const { error } = await db.from("lead_history").insert({
       lead_id: leadId,
       user_id: user.id,
-      action,
-      details
+      action: sanitizeText(action),
+      details: sanitizeText(details)
     });
     if (error) console.warn("Aviso ao registrar histórico:", error.message);
   } catch (e) {
@@ -194,7 +214,7 @@ async function addHistory(leadId, action, details = "") {
  * para contornar o limite padrão de 1000 linhas do PostgREST/Supabase.
  */
 async function fetchAllUserLeadsFromDb() {
-  if (!db || !user?.id) return [];
+  const activeUser = await ensureActiveUser();
   const allRows = [];
   const pageSize = 1000;
   let from = 0;
@@ -203,7 +223,7 @@ async function fetchAllUserLeadsFromDb() {
     const { data, error } = await db
       .from("leads")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", activeUser.id)
       .order("created_at", { ascending: false })
       .range(from, from + pageSize - 1);
 
@@ -227,7 +247,7 @@ async function fetchAllUserLeadsFromDb() {
 }
 
 async function loadLeads(resetPagination = false) {
-  if (!db || !user?.id) return;
+  if (!db) return;
   try {
     const allData = await fetchAllUserLeadsFromDb();
     leads = allData;
@@ -440,14 +460,9 @@ async function saveLead(e) {
   const btn = $("save-lead-btn");
   errEl.textContent = "";
 
-  if (!db || !user?.id) {
-    errEl.textContent = "Sessão não autenticada. Faça login novamente antes de salvar.";
-    return;
-  }
-
   const id = $("lead-id").value.trim();
-  const name = $("lead-name").value.trim();
-  const rawPhone = $("lead-phone").value.trim();
+  const name = sanitizeText($("lead-name").value);
+  const rawPhone = sanitizeText($("lead-phone").value);
 
   if (!name || !rawPhone) {
     errEl.textContent = "Preencha os campos obrigatórios: Nome do cliente e Telefone com DDD.";
@@ -464,7 +479,7 @@ async function saveLead(e) {
   btn.textContent = "Verificando...";
 
   try {
-    // Atualiza lista do banco antes de salvar para evitar duplicidade
+    const activeUser = await ensureActiveUser();
     const latestLeads = await fetchAllUserLeadsFromDb();
     leads = latestLeads;
 
@@ -481,14 +496,14 @@ async function saveLead(e) {
     btn.textContent = "Salvando...";
 
     const payload = {
-      user_id: user.id,
+      user_id: activeUser.id,
       name,
       phone: normalizePhoneForStorage(rawPhone),
       development: $("lead-development").value || "Dom Parque",
       status: $("lead-status").value || "Pendente",
       preferred_modality: $("lead-modality").value || null,
       next_action_date: $("lead-next-date").value || null,
-      notes: $("lead-notes").value.trim() || null
+      notes: sanitizeText($("lead-notes").value) || null
     };
 
     let result;
@@ -497,7 +512,7 @@ async function saveLead(e) {
         .from("leads")
         .update(payload)
         .eq("id", id)
-        .eq("user_id", user.id)
+        .eq("user_id", activeUser.id)
         .select()
         .single();
     } else {
@@ -561,8 +576,8 @@ async function executePermanentDelete() {
   const btn = $("confirm-delete-btn");
   errEl.textContent = "";
 
-  if (!db || !user?.id || !leadPendingDeletion?.id) {
-    errEl.textContent = "Contato não selecionado ou sessão expirada.";
+  if (!leadPendingDeletion?.id) {
+    errEl.textContent = "Contato não selecionado.";
     return;
   }
 
@@ -571,23 +586,23 @@ async function executePermanentDelete() {
   btn.textContent = "Excluindo...";
 
   try {
-    // 1. Remove explicitamente o histórico associado (além do ON DELETE CASCADE no banco)
+    const activeUser = await ensureActiveUser();
+
     const { error: histErr } = await db
       .from("lead_history")
       .delete()
       .eq("lead_id", target.id)
-      .eq("user_id", user.id);
+      .eq("user_id", activeUser.id);
 
     if (histErr) {
       throw histErr;
     }
 
-    // 2. Remove definitivamente o contato da tabela leads restrito ao user_id autenticado
     const { data: deletedRows, error: delErr } = await db
       .from("leads")
       .delete()
       .eq("id", target.id)
-      .eq("user_id", user.id)
+      .eq("user_id", activeUser.id)
       .select("id");
 
     if (delErr) {
@@ -655,6 +670,7 @@ async function openLeadDetails(id) {
 
   $("detail-sent").onclick = async () => {
     try {
+      const activeUser = await ensureActiveUser();
       const { error } = await db
         .from("leads")
         .update({
@@ -662,7 +678,7 @@ async function openLeadDetails(id) {
           last_contacted_at: new Date().toISOString()
         })
         .eq("id", l.id)
-        .eq("user_id", user.id);
+        .eq("user_id", activeUser.id);
 
       if (error) {
         toast("Erro ao atualizar status: " + translateSupabaseError(error));
@@ -673,8 +689,8 @@ async function openLeadDetails(id) {
       $("detail-dialog").close();
       toast("Status atualizado para Mensagem enviada.");
       await loadLeads();
-    } catch {
-      toast("Erro inesperado ao atualizar status.");
+    } catch (err) {
+      toast("Erro inesperado ao atualizar status: " + translateSupabaseError(err));
     }
   };
 
@@ -687,11 +703,12 @@ async function openLeadDetails(id) {
   $("detail-archive").onclick = async () => {
     const nextArchived = !l.archived;
     try {
+      const activeUser = await ensureActiveUser();
       const { error } = await db
         .from("leads")
         .update({ archived: nextArchived })
         .eq("id", l.id)
-        .eq("user_id", user.id);
+        .eq("user_id", activeUser.id);
 
       if (error) {
         toast("Erro ao atualizar arquivamento: " + translateSupabaseError(error));
@@ -702,8 +719,8 @@ async function openLeadDetails(id) {
       $("detail-dialog").close();
       toast(nextArchived ? "Lead arquivado." : "Lead restaurado para ativos.");
       await loadLeads();
-    } catch {
-      toast("Erro inesperado ao arquivar/restaurar.");
+    } catch (err) {
+      toast("Erro inesperado ao arquivar/restaurar: " + translateSupabaseError(err));
     }
   };
 
@@ -715,11 +732,12 @@ async function openLeadDetails(id) {
   $("detail-dialog").showModal();
 
   try {
+    const activeUser = await ensureActiveUser();
     const h = await db
       .from("lead_history")
       .select("*")
       .eq("lead_id", id)
-      .eq("user_id", user.id)
+      .eq("user_id", activeUser.id)
       .order("created_at", { ascending: false })
       .limit(50);
 
@@ -768,13 +786,8 @@ async function runDatabaseDiagnostics() {
     }
     pushCheck("1. Cliente Supabase", true, "Instância conectada à URL configurada.");
 
-    const { data: userData, error: userErr } = await db.auth.getUser();
-    if (userErr || !userData?.user) {
-      pushCheck("2. Autenticação e Sessão", false, translateSupabaseError(userErr) || "Usuário não autenticado.");
-      return;
-    }
-    user = userData.user;
-    pushCheck("2. Autenticação e Sessão", true, `Autenticado como ${user.email} (ID: ${user.id}).`);
+    const activeUser = await ensureActiveUser();
+    pushCheck("2. Autenticação e Sessão", true, `Autenticado como ${activeUser.email} (ID: ${activeUser.id}).`);
 
     const allLeads = await fetchAllUserLeadsFromDb();
     const activeCount = allLeads.filter((l) => !l.archived).length;
@@ -786,7 +799,7 @@ async function runDatabaseDiagnostics() {
     );
 
     const testPayload = {
-      user_id: user.id,
+      user_id: activeUser.id,
       name: "__TESTE_DIAGNOSTICO_CRM__",
       phone: "(11) 90000-0000",
       development: "Outro",
@@ -818,7 +831,7 @@ async function runDatabaseDiagnostics() {
       pushCheck("5. Confirmação de Persistência", true, "Persistência confirmada no PostgreSQL/Supabase.");
     }
 
-    await db.from("leads").delete().eq("id", insData.id).eq("user_id", user.id);
+    await db.from("leads").delete().eq("id", insData.id).eq("user_id", activeUser.id);
     pushCheck("6. Limpeza do Teste (DELETE)", true, "Registro temporário de diagnóstico removido automaticamente.");
   } catch (err) {
     pushCheck("Erro inesperado", false, translateSupabaseError(err));
@@ -840,7 +853,6 @@ async function openImportDialog() {
   parsedImportRows = [];
   $("import-dialog").showModal();
 
-  // Sincroniza a lista de leads do banco antes mesmo de o usuário selecionar o arquivo
   try {
     leads = await fetchAllUserLeadsFromDb();
   } catch (err) {
@@ -872,8 +884,11 @@ function handleFileUpload(e) {
         return;
       }
 
-      // Garante base atualizada do banco (ativos + arquivados) antes de analisar duplicidades
-      leads = await fetchAllUserLeadsFromDb();
+      try {
+        leads = await fetchAllUserLeadsFromDb();
+      } catch (syncErr) {
+        console.warn("Aviso ao sincronizar leads na abertura:", syncErr);
+      }
 
       const sheetSelect = $("import-sheet-select");
       sheetSelect.innerHTML = sheetNames
@@ -957,30 +972,30 @@ function buildPreparedImportList(currentDbLeads) {
 
   return parsedImportRows.map((row, index) => {
     const rowNum = index + 2;
-    const name = String(row[colName] || "").trim();
-    const rawPhone = String(row[colPhone] || "").trim();
+    const name = sanitizeText(row[colName]);
+    const rawPhone = sanitizeText(row[colPhone]);
     const digits = phoneDigits(rawPhone);
     const formattedPhone = normalizePhoneForStorage(rawPhone);
 
-    const rawDev = String(row[colDev] || "").trim();
+    const rawDev = sanitizeText(row[colDev]);
     let development = "Dom Parque";
     if (/barueri/i.test(rawDev)) development = "Dom Barueri";
     else if (/parque/i.test(rawDev)) development = "Dom Parque";
     else if (rawDev) development = "Outro";
 
-    const rawStatus = String(row[colStatus] || "").trim();
+    const rawStatus = sanitizeText(row[colStatus]);
     const status = VALID_STATUSES.includes(rawStatus) ? rawStatus : "Pendente";
 
-    const prevStatus = String(row[colPrev] || "").trim();
-    const rawNotes = String(row[colNotes] || "").trim();
+    const prevStatus = sanitizeText(row[colPrev]);
+    const rawNotes = sanitizeText(row[colNotes]);
 
     const noteParts = [];
     if (prevStatus) noteParts.push(`Situação anterior no app: ${prevStatus}`);
     if (rawDev && !["Dom Parque", "Dom Barueri"].includes(rawDev)) noteParts.push(`Lista original: ${rawDev}`);
     if (rawNotes) noteParts.push(rawNotes);
-    const notes = noteParts.length ? noteParts.join(" | ") : null;
+    const notes = noteParts.length ? sanitizeText(noteParts.join(" | ")) : null;
 
-    const archived = archiveDiscarded && /^descartado$/i.test(prevStatus);
+    const archived = Boolean(archiveDiscarded && /^descartado$/i.test(prevStatus));
 
     let category = "valid"; // valid | invalid | duplicate_db | duplicate_sheet
     let skipReason = "";
@@ -1106,18 +1121,14 @@ async function executeBatchImport() {
   const reportEl = $("import-report-box");
   errEl.textContent = "";
 
-  if (!db || !user?.id) {
-    errEl.textContent = "Sessão expirada. Faça login novamente.";
-    return;
-  }
-
   btn.disabled = true;
-  btn.textContent = "Sincronizando banco de dados...";
+  btn.textContent = "Verificando sessão...";
   progressEl.classList.remove("hidden");
-  progressEl.textContent = "Consultando registros existentes no Supabase (ativos e arquivados) antes de iniciar...";
+  progressEl.textContent = "Validando sessão e sincronizando registros existentes no Supabase...";
 
   try {
-    // 1. Consulta novamente o banco antes de iniciar a importação
+    // 1. Garante sessão válida e consulta o banco antes de iniciar
+    const activeUser = await ensureActiveUser();
     const freshLeads = await fetchAllUserLeadsFromDb();
     leads = freshLeads;
 
@@ -1135,10 +1146,10 @@ async function executeBatchImport() {
       return;
     }
 
-    const chunkSize = 50;
+    const chunkSize = 25;
     const totalChunks = Math.ceil(toInsert.length / chunkSize);
     const insertedAll = [];
-    const failedChunks = [];
+    const failedRows = [];
 
     for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
       const start = chunkIndex * chunkSize;
@@ -1148,7 +1159,7 @@ async function executeBatchImport() {
       btn.textContent = `Importando lote ${chunkIndex + 1}/${totalChunks}...`;
 
       const payload = slice.map((x) => ({
-        user_id: user.id,
+        user_id: activeUser.id,
         name: x.name,
         phone: x.phone,
         development: x.development,
@@ -1162,36 +1173,56 @@ async function executeBatchImport() {
         .insert(payload)
         .select("id, name, development, archived");
 
-      if (error) {
-        failedChunks.push({
-          batchNumber: chunkIndex + 1,
-          startRow: slice[0].rowNum,
-          endRow: slice[slice.length - 1].rowNum,
-          count: slice.length,
-          reason: translateSupabaseError(error)
-        });
-        // Continua processando os próximos lotes sem abortar o relatório final
-        continue;
-      }
-
-      if (data && data.length > 0) {
+      if (!error && data && data.length > 0) {
         insertedAll.push(...data);
 
         const historyRows = data.map((item) => ({
           lead_id: item.id,
-          user_id: user.id,
+          user_id: activeUser.id,
           action: "Lead importado em lote",
           details: `Importação via planilha (${item.development}${item.archived ? " - Arquivado" : ""})`
         }));
 
-        const { error: histErr } = await db.from("lead_history").insert(historyRows);
-        if (histErr) {
-          console.warn(`Aviso no histórico do lote ${chunkIndex + 1}:`, histErr.message);
+        await db.from("lead_history").insert(historyRows);
+      } else {
+        // Fallback linha a linha se o lote falhar, salvando os válidos e isolando o registro com problema
+        for (const item of slice) {
+          const singlePayload = {
+            user_id: activeUser.id,
+            name: item.name,
+            phone: item.phone,
+            development: item.development,
+            status: item.status,
+            notes: item.notes,
+            archived: item.archived
+          };
+
+          const singleRes = await db
+            .from("leads")
+            .insert(singlePayload)
+            .select("id, name, development, archived")
+            .single();
+
+          if (!singleRes.error && singleRes.data) {
+            insertedAll.push(singleRes.data);
+            await db.from("lead_history").insert({
+              lead_id: singleRes.data.id,
+              user_id: activeUser.id,
+              action: "Lead importado em lote",
+              details: `Importação via planilha (${singleRes.data.development}${singleRes.data.archived ? " - Arquivado" : ""})`
+            });
+          } else {
+            failedRows.push({
+              rowNum: item.rowNum,
+              name: item.name,
+              phone: item.phone,
+              reason: translateSupabaseError(singleRes.error || error)
+            });
+          }
         }
       }
     }
 
-    // Recarrega todos os contatos do banco após concluir os lotes
     await loadLeads(true);
 
     progressEl.classList.add("hidden");
@@ -1200,13 +1231,13 @@ async function executeBatchImport() {
 
     const importedActiveCount = insertedAll.filter((x) => !x.archived).length;
     const importedArchivedCount = insertedAll.filter((x) => x.archived).length;
-    const hasBatchErrors = failedChunks.length > 0;
+    const hasRowErrors = failedRows.length > 0;
 
-    reportEl.className = hasBatchErrors ? "import-report partial-warn" : "import-report";
+    reportEl.className = hasRowErrors ? "import-report partial-warn" : "import-report";
     reportEl.classList.remove("hidden");
 
     reportEl.innerHTML = `
-      <h3>${hasBatchErrors ? "⚠️ Importação Concluída com Alertas de Lote" : "✔ Relatório Final de Importação"}</h3>
+      <h3>${hasRowErrors ? "⚠️ Importação Concluída com Alertas" : "✔ Relatório Final de Importação"}</h3>
       <ul>
         <li><b>Total de linhas identificadas na planilha:</b> ${list.length}</li>
         <li><b>Contatos válidos aptos para importar:</b> ${toInsert.length}</li>
@@ -1214,16 +1245,16 @@ async function executeBatchImport() {
         <li><b>Duplicados já existentes no banco (ativos ou arquivados):</b> ${dupDbRows.length}</li>
         <li><b>Duplicados dentro da própria planilha:</b> ${dupSheetRows.length}</li>
         <li><b>Ignorados por dados ausentes ou inválidos:</b> ${invalidRows.length}</li>
-        ${hasBatchErrors ? `<li><b>Lotes com falha de gravação:</b> ${failedChunks.length} lote(s)</li>` : ""}
+        ${hasRowErrors ? `<li><b>Registros rejeitados pelo banco:</b> ${failedRows.length}</li>` : ""}
       </ul>
       ${
-        hasBatchErrors
+        hasRowErrors
           ? `<div class="error" style="margin-bottom:0.75rem">
-              <b>Atenção:</b> Os lotes abaixo falharam e não foram gravados. Os ${insertedAll.length} contatos dos lotes bem-sucedidos já estão salvos com segurança — se você tentar importar esta mesma planilha novamente, eles serão ignorados automaticamente sem duplicar.
+              <b>Motivo detalhado das linhas rejeitadas:</b>
               <ul>
-                ${failedChunks
+                ${failedRows
                   .map(
-                    (f) => `<li>Lote ${f.batchNumber} (linhas ${f.startRow} a ${f.endRow} — ${f.count} contatos): ${esc(f.reason)}</li>`
+                    (f) => `<li>Linha ${f.rowNum}: <b>${esc(f.name)}</b> (${esc(f.phone)}) — ${esc(f.reason)}</li>`
                   )
                   .join("")}
               </ul>
@@ -1281,6 +1312,10 @@ async function connectSupabase(url, key) {
     }
   });
 
+  db.auth.onAuthStateChange((_event, session) => {
+    user = session?.user || null;
+  });
+
   const { data, error } = await db.auth.getSession();
   if (error) throw error;
 
@@ -1297,15 +1332,14 @@ async function connectSupabase(url, key) {
 }
 
 async function enterAuthenticatedApp() {
-  const { data, error } = await db.auth.getUser();
-  if (error || !data?.user) {
+  try {
+    const activeUser = await ensureActiveUser();
+    $("user-email").textContent = activeUser.email || "Usuário conectado";
+    showScreen("app-screen");
+    await loadLeads(true);
+  } catch {
     showScreen("login-screen");
-    return;
   }
-  user = data.user;
-  $("user-email").textContent = user.email || "Usuário conectado";
-  showScreen("app-screen");
-  await loadLeads(true);
 }
 
 function bindEvents() {

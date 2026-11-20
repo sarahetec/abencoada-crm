@@ -73,7 +73,7 @@ const toast = (msg) => {
   t.textContent = msg;
   t.classList.add("show");
   clearTimeout(t._timer);
-  t._timer = setTimeout(() => t.classList.remove("show"), 3500);
+  t._timer = setTimeout(() => t.classList.remove("show"), 4000);
 };
 
 const slug = (s) =>
@@ -85,14 +85,21 @@ const slug = (s) =>
 
 /**
  * Extrai e normaliza o telefone brasileiro para 10 ou 11 dígitos nacionais (DDD + número).
- * Evita duplicação de DDI 55 e remove zeros à esquerda ou múltiplos números na mesma string.
  */
 function phoneDigits(raw) {
   let text = sanitizeText(raw);
   if (!text) return "";
 
-  // Se houver mais de um telefone separado por /, ; ou "ou", pega apenas o primeiro
-  text = text.split(/[\/;]|(?:\s+ou\s+)/i)[0].trim();
+  // Se houver mais de um telefone separado por /, ;, | ou "ou", pega apenas o primeiro
+  text = text.split(/[\/;|]|(?:\s+ou\s+)/i)[0].trim();
+
+  // Remove notação científica se algum número veio do Excel como 5.51199E+12
+  if (/^\d+[.,]\d+e\+\d+$/i.test(text)) {
+    const num = Number(text.replace(",", "."));
+    if (!Number.isNaN(num)) {
+      text = String(Math.round(num));
+    }
+  }
 
   let d = text.replace(/\D/g, "");
   if (!d) return "";
@@ -102,11 +109,11 @@ function phoneDigits(raw) {
     d = d.slice(2);
   }
 
-  // Remove DDI 55 repetido ou único quando seguido de DDD (2 dígitos >= 11) + 8 ou 9 dígitos
-  while (d.startsWith("55") && (d.length === 12 || d.length === 13 || d.length === 14 || d.length === 15)) {
+  // Remove DDI 55 quando o total tiver 12, 13 ou 14 dígitos e os 2 seguintes formarem um DDD válido (11..99)
+  while (d.startsWith("55") && d.length >= 12) {
     const candidate = d.slice(2);
     const ddd = Number(candidate.slice(0, 2));
-    if (ddd >= 11 && ddd <= 99 && candidate.length >= 10) {
+    if (ddd >= 11 && ddd <= 99 && (candidate.length === 10 || candidate.length === 11 || candidate.startsWith("55"))) {
       d = candidate;
     } else {
       break;
@@ -147,7 +154,7 @@ function adaptMessageForLead(msgText, lead) {
   return text;
 }
 
-function buildWhatsAppUrl(lead, rawMessage) {
+function buildWhatsAppWebUrl(lead, rawMessage) {
   const nationalDigits = phoneDigits(lead?.phone);
   if (!nationalDigits || (nationalDigits.length !== 10 && nationalDigits.length !== 11)) {
     return null;
@@ -160,17 +167,21 @@ function buildWhatsAppUrl(lead, rawMessage) {
 
   const fullInternationalPhone = `55${nationalDigits}`;
   const message = adaptMessageForLead(rawMessage, lead);
-  return `https://api.whatsapp.com/send?phone=${fullInternationalPhone}&text=${encodeURIComponent(message)}`;
+  return {
+    url: `https://web.whatsapp.com/send?phone=${fullInternationalPhone}&text=${encodeURIComponent(message)}`,
+    phoneSent: fullInternationalPhone
+  };
 }
 
 function openWhatsAppForLead(lead, msgIndex = 0) {
   const template = MESSAGES[msgIndex]?.[2] || MESSAGES[0][2];
-  const url = buildWhatsAppUrl(lead, template);
-  if (!url) {
-    toast(`Telefone inválido ou sem DDD ("${lead?.phone || ""}"). Edite o contato antes de abrir o WhatsApp.`);
+  const result = buildWhatsAppWebUrl(lead, template);
+  if (!result) {
+    toast(`Telefone inválido ou incompleto ("${lead?.phone || ""}"). Clique em Detalhes > Editar para corrigir o DDD/número.`);
     return;
   }
-  window.open(url, "_blank", "noopener,noreferrer");
+  toast(`Abrindo WhatsApp Web para +${result.phoneSent}...`);
+  window.open(result.url, "_blank", "noopener,noreferrer");
 }
 
 function translateSupabaseError(err) {
@@ -353,7 +364,7 @@ function renderDashboard() {
                 <td><span class="status ${slug(x.status)}">${esc(x.status)}</span></td>
                 <td>${esc(formatDateBR(x.next_action_date))}</td>
                 <td class="row-actions">
-                  <button type="button" class="table-action wa-inline" data-wa="${esc(x.id)}">WhatsApp</button>
+                  <button type="button" class="table-action wa-inline" data-wa="${esc(x.id)}">WhatsApp Web</button>
                   <button type="button" class="table-action" data-detail="${esc(x.id)}">Abrir</button>
                 </td>
               </tr>`
@@ -476,7 +487,7 @@ function renderLeads() {
                 <td><span class="status ${slug(x.status)}">${esc(x.status)}</span></td>
                 <td>${esc(formatDateBR(x.next_action_date))}</td>
                 <td class="row-actions">
-                  <button type="button" class="table-action wa-inline" data-wa="${esc(x.id)}" title="Abrir conversa no WhatsApp">WhatsApp</button>
+                  <button type="button" class="table-action wa-inline" data-wa="${esc(x.id)}" title="Abrir no WhatsApp Web">WhatsApp Web</button>
                   <button type="button" class="table-action" data-detail="${esc(x.id)}">Detalhes</button>
                   <button type="button" class="table-action del-inline" data-delete="${esc(x.id)}" title="Excluir permanentemente">Excluir</button>
                 </td>
@@ -551,7 +562,7 @@ async function saveLead(e) {
 
   const digits = phoneDigits(rawPhone);
   if (digits.length < 10 || digits.length > 11) {
-    errEl.textContent = "Informe um telefone brasileiro válido com DDD (10 ou 11 dígitos).";
+    errEl.textContent = "Informe um telefone brasileiro válido com DDD (10 ou 11 dígitos). Ex.: (11) 99999-9999.";
     return;
   }
 
@@ -862,10 +873,16 @@ async function openLeadDetails(id) {
 
   const formattedDisplayPhone = normalizePhoneForStorage(l.phone);
   const waDigitsPreview = phoneDigits(l.phone);
+  const isPhoneValid = waDigitsPreview.length === 10 || waDigitsPreview.length === 11;
 
   $("detail-name").textContent = l.name;
   $("detail-content").innerHTML = [
-    ["Telefone", waDigitsPreview ? `${formattedDisplayPhone} (WhatsApp: +55 ${waDigitsPreview})` : `${l.phone} (sem DDD válido)`],
+    [
+      "Telefone",
+      isPhoneValid
+        ? `${formattedDisplayPhone} → Destino WhatsApp Web: 55${waDigitsPreview}`
+        : `${l.phone} (⚠️ Número inválido — clique em Editar para corrigir DDD/dígitos)`
+    ],
     ["Empreendimento", l.development],
     ["Status", l.status],
     ["Preferência", l.preferred_modality || "Não definida"],
@@ -889,6 +906,7 @@ async function openLeadDetails(id) {
   msgSelect.onchange = updatePreview;
   updatePreview();
 
+  $("detail-whatsapp").textContent = "Abrir WhatsApp Web";
   $("detail-whatsapp").onclick = () => {
     const idx = Number(msgSelect.value) || 0;
     openWhatsAppForLead(l, idx);

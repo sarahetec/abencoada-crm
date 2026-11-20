@@ -1,27 +1,15 @@
-# Abençoada CRM — primeira versão
+# Abençoada CRM
 
-## Funcionalidades preparadas
-- Dashboard e contadores.
-- Cadastro, edição, pesquisa e filtros de leads.
-- Arquivamento reversível e restauração.
-- Biblioteca pesquisável com 20 modelos de mensagens e botão de copiar.
-- Botão WhatsApp com mensagem inicial preenchida; nunca envia automaticamente.
-- Confirmação manual para mudar o status para “Mensagem enviada”.
-- Histórico de cadastro, edição, arquivamento e confirmação de envio.
-- Supabase como banco de dados remoto.
+CRM para gerenciamento de contatos da Corretora Abençoada com autenticação Supabase, banco de dados PostgreSQL com RLS, histórico de atividades, integração com WhatsApp (20 mensagens prontas) e importação em massa de planilhas Excel/CSV.
 
-## Configuração do Supabase
-1. Crie um projeto no Supabase.
-2. Abra SQL Editor e execute `supabase-schema.sql`.
-3. Em Authentication > Users, crie seu usuário com e-mail e senha.
-4. Em Project Settings > API, copie Project URL e a chave publicável (anon/public).
-5. Nunca use a chave `service_role` no navegador.
+## Arquivos do Projeto
+- `index.html` — Estrutura completa da aplicação, telas de conexão/login, modais de cadastro, detalhes, diagnóstico e importação.
+- `app.js` — Lógica completa em ES Modules, integração Supabase, validação, WhatsApp e importador SheetJS.
+- `styles.css` — Identidade visual marrom, bege e off-white responsiva (celular, tablet e computador).
+- `supabase-schema.sql` — Script SQL idempotente para criar/atualizar tabelas, índices, gatilhos e políticas RLS.
 
-## Testar localmente
-Abra a pasta no VS Code. Instale a extensão Live Server e abra `index.html` com Live Server. Informe a URL e a chave publicável na tela inicial. A configuração fica na sessão atual do navegador.
-
-## GitHub e publicação
-Crie um repositório **Private** chamado `abencoada-crm` e envie os arquivos desta pasta. Para disponibilizar como site, conecte o repositório a um serviço de hospedagem estática, como Cloudflare Pages.
-
-## Atenção
-Não cadastre dados reais antes de configurar autenticação e executar o SQL. A chave publicável é própria para frontend, mas a segurança depende das políticas RLS. O Supabase e a hospedagem gratuitos têm limites de uso. Esta versão ainda não importa Excel/CSV e a biblioteca de mensagens está fixa no código; essas serão próximas melhorias.
+## Como publicar no GitHub Pages
+1. Execute `supabase-schema.sql` no **SQL Editor** do seu projeto Supabase.
+2. Em **Authentication → URL Configuration** no Supabase, defina a **Site URL** com o endereço do seu GitHub Pages.
+3. Suba todos os arquivos desta pasta para a raiz (`main`) do seu repositório GitHub.
+4. Ative o GitHub Pages em **Settings → Pages → Deploy from a branch (`main` / `/root`)**.

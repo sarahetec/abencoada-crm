@@ -44,7 +44,9 @@ let db = null;
 let user = null;
 let leads = [];
 let selectedLead = null;
-let leadPendingDeletion = null;
+let leadsPendingDeletion = [];
+let selectedLeadIds = new Set();
+let currentFilteredLeads = [];
 let currentWorkbook = null;
 let parsedImportRows = [];
 let visibleLeadsLimit = LEADS_PAGE_SIZE;
@@ -58,9 +60,6 @@ const esc = (s) =>
     "'": "&#39;"
   }[c]));
 
-/**
- * Remove caracteres nulos (\u0000) e de controle que quebram inserts JSON no PostgreSQL
- */
 function sanitizeText(val) {
   return String(val ?? "")
     .replace(/\u0000/g, "")
@@ -84,10 +83,6 @@ const slug = (s) =>
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, "-");
 
-/**
- * Normaliza telefone brasileiro para comparação de unicidade.
- * Remove DDI 55, zeros à esquerda, máscaras, espaços e mantém apenas os dígitos nacionais (DDD + número).
- */
 function phoneDigits(raw) {
   let text = sanitizeText(raw);
   if (!text) return "";
@@ -209,10 +204,24 @@ async function addHistory(leadId, action, details = "") {
   }
 }
 
-/**
- * Busca TODOS os leads do usuário autenticado (ativos e arquivados) paginando em blocos de 1000
- * para contornar o limite padrão de 1000 linhas do PostgREST/Supabase.
- */
+async function addHistoryBatch(leadIds, action, details = "") {
+  if (!db || !user?.id || !leadIds.length) return;
+  try {
+    const rows = leadIds.map((id) => ({
+      lead_id: id,
+      user_id: user.id,
+      action: sanitizeText(action),
+      details: sanitizeText(details)
+    }));
+    const chunkSize = 100;
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      await db.from("lead_history").insert(rows.slice(i, i + chunkSize));
+    }
+  } catch (e) {
+    console.warn("Exceção ao registrar histórico em lote:", e);
+  }
+}
+
 async function fetchAllUserLeadsFromDb() {
   const activeUser = await ensureActiveUser();
   const allRows = [];
@@ -251,6 +260,11 @@ async function loadLeads(resetPagination = false) {
   try {
     const allData = await fetchAllUserLeadsFromDb();
     leads = allData;
+
+    // Mantém apenas IDs selecionados que ainda existem no banco
+    const validIds = new Set(leads.map((l) => l.id));
+    selectedLeadIds = new Set([...selectedLeadIds].filter((id) => validIds.has(id)));
+
     if (resetPagination) {
       visibleLeadsLimit = LEADS_PAGE_SIZE;
     }
@@ -333,6 +347,31 @@ function formatDateBR(isoDate) {
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
+function updateBulkBar() {
+  const bar = $("bulk-actions-bar");
+  const showArchived = $("show-archived").checked;
+  const count = selectedLeadIds.size;
+
+  if (count === 0) {
+    bar.classList.add("hidden");
+    return;
+  }
+
+  bar.classList.remove("hidden");
+  $("bulk-selected-count").textContent = `${count} selecionado(s)`;
+
+  const selectAllFilteredBtn = $("bulk-select-all-filtered");
+  if (currentFilteredLeads.length > count) {
+    selectAllFilteredBtn.classList.remove("hidden");
+    selectAllFilteredBtn.textContent = `Selecionar todos os ${currentFilteredLeads.length} filtrados`;
+  } else {
+    selectAllFilteredBtn.classList.add("hidden");
+  }
+
+  $("bulk-archive-btn").classList.toggle("hidden", showArchived);
+  $("bulk-restore-btn").classList.toggle("hidden", !showArchived);
+}
+
 function renderLeads() {
   const q = $("lead-search").value.trim().toLowerCase();
   const qDigits = q.replace(/\D/g, "");
@@ -356,9 +395,18 @@ function renderLeads() {
     return true;
   });
 
+  currentFilteredLeads = filtered;
+
+  // Limpa seleções que não pertencem ao filtro/aba atual (ex.: alternou entre Ativos e Arquivados)
+  const filteredIdSet = new Set(filtered.map((x) => x.id));
+  selectedLeadIds = new Set([...selectedLeadIds].filter((id) => filteredIdSet.has(id)));
+
   const totalActive = leads.filter((x) => !x.archived).length;
   const totalArch = leads.filter((x) => x.archived).length;
   const visibleSlice = filtered.slice(0, visibleLeadsLimit);
+
+  const allVisibleSelected =
+    visibleSlice.length > 0 && visibleSlice.every((item) => selectedLeadIds.has(item.id));
 
   $("leads-count-label").textContent =
     `Exibindo ${visibleSlice.length} de ${filtered.length} filtrado(s) • Total: ${totalActive} ativos e ${totalArch} arquivados`;
@@ -371,10 +419,15 @@ function renderLeads() {
     paginationBar.classList.add("hidden");
   }
 
+  updateBulkBar();
+
   $("leads-table").innerHTML = visibleSlice.length
     ? `<table>
         <thead>
           <tr>
+            <th class="col-check">
+              <input type="checkbox" id="select-all-visible-checkbox" ${allVisibleSelected ? "checked" : ""} aria-label="Selecionar todos os visíveis">
+            </th>
             <th>Nome</th>
             <th>Telefone</th>
             <th>Empreendimento</th>
@@ -385,8 +438,12 @@ function renderLeads() {
         </thead>
         <tbody>
           ${visibleSlice
-            .map(
-              (x) => `<tr>
+            .map((x) => {
+              const isSelected = selectedLeadIds.has(x.id);
+              return `<tr class="${isSelected ? "row-selected" : ""}">
+                <td class="col-check">
+                  <input type="checkbox" class="lead-row-checkbox" data-select-id="${esc(x.id)}" ${isSelected ? "checked" : ""} aria-label="Selecionar ${esc(x.name)}">
+                </td>
                 <td>
                   <b>${esc(x.name)}</b>
                   ${x.archived ? '<span class="badge-archived">Arquivado</span>' : ""}
@@ -400,8 +457,8 @@ function renderLeads() {
                   <button type="button" class="table-action" data-detail="${esc(x.id)}">Detalhes</button>
                   <button type="button" class="table-action del-inline" data-delete="${esc(x.id)}" title="Excluir permanentemente">Excluir</button>
                 </td>
-              </tr>`
-            )
+              </tr>`;
+            })
             .join("")}
         </tbody>
       </table>`
@@ -552,22 +609,47 @@ async function saveLead(e) {
   }
 }
 
-function openDeleteConfirm(leadId) {
-  const lead = leads.find((x) => x.id === leadId);
-  if (!lead) return;
+function openDeleteConfirm(leadIds) {
+  const ids = Array.isArray(leadIds) ? leadIds : [leadIds];
+  const targets = leads.filter((x) => ids.includes(x.id));
+  if (!targets.length) return;
 
-  leadPendingDeletion = lead;
+  leadsPendingDeletion = targets;
   $("delete-error").textContent = "";
-  $("delete-confirm-summary").innerHTML = `
-    <div><strong>Nome:</strong> ${esc(lead.name)}</div>
-    <div><strong>Telefone:</strong> ${esc(lead.phone)}</div>
-    <div><strong>Empreendimento:</strong> ${esc(lead.development)}</div>
-    <div><strong>Situação atual:</strong> ${lead.archived ? "Arquivado" : "Ativo"} (${esc(lead.status)})</div>
-  `;
+
+  if (targets.length === 1) {
+    const lead = targets[0];
+    $("delete-dialog-title").textContent = "Excluir contato permanentemente?";
+    $("delete-dialog-desc").innerHTML =
+      "Você está prestes a excluir definitivamente o contato abaixo e <b>todo o seu histórico de atividades</b>. Esta ação não pode ser desfeita.";
+    $("delete-confirm-summary").innerHTML = `
+      <div><strong>Nome:</strong> ${esc(lead.name)}</div>
+      <div><strong>Telefone:</strong> ${esc(lead.phone)}</div>
+      <div><strong>Empreendimento:</strong> ${esc(lead.development)}</div>
+      <div><strong>Situação atual:</strong> ${lead.archived ? "Arquivado" : "Ativo"} (${esc(lead.status)})</div>
+    `;
+  } else {
+    $("delete-dialog-title").textContent = `Excluir ${targets.length} contatos permanentemente?`;
+    $("delete-dialog-desc").innerHTML =
+      `Você está prestes a excluir definitivamente <b>${targets.length} contatos selecionados</b> e <b>todo o histórico associado a eles</b>. Esta ação não pode ser desfeita.`;
+    $("delete-confirm-summary").innerHTML = `
+      <div><strong>Contatos selecionados (${targets.length}):</strong></div>
+      <ul>
+        ${targets
+          .slice(0, 30)
+          .map((l) => `<li>${esc(l.name)} — ${esc(l.phone)} (${l.archived ? "Arquivado" : "Ativo"})</li>`)
+          .join("")}
+        ${targets.length > 30 ? `<li><i>... e mais ${targets.length - 30} contato(s).</i></li>` : ""}
+      </ul>
+    `;
+  }
 
   const btn = $("confirm-delete-btn");
   btn.disabled = false;
-  btn.textContent = "Sim, excluir definitivamente";
+  btn.textContent =
+    targets.length === 1
+      ? "Sim, excluir definitivamente"
+      : `Sim, excluir ${targets.length} contatos`;
   $("delete-confirm-dialog").showModal();
 }
 
@@ -576,41 +658,50 @@ async function executePermanentDelete() {
   const btn = $("confirm-delete-btn");
   errEl.textContent = "";
 
-  if (!leadPendingDeletion?.id) {
-    errEl.textContent = "Contato não selecionado.";
+  if (!leadsPendingDeletion.length) {
+    errEl.textContent = "Nenhum contato selecionado para exclusão.";
     return;
   }
 
-  const target = leadPendingDeletion;
+  const targets = [...leadsPendingDeletion];
+  const targetIds = targets.map((t) => t.id);
   btn.disabled = true;
   btn.textContent = "Excluindo...";
 
   try {
     const activeUser = await ensureActiveUser();
+    const chunkSize = 100;
+    let totalDeleted = 0;
 
-    const { error: histErr } = await db
-      .from("lead_history")
-      .delete()
-      .eq("lead_id", target.id)
-      .eq("user_id", activeUser.id);
+    for (let i = 0; i < targetIds.length; i += chunkSize) {
+      const sliceIds = targetIds.slice(i, i + chunkSize);
 
-    if (histErr) {
-      throw histErr;
+      const { error: histErr } = await db
+        .from("lead_history")
+        .delete()
+        .in("lead_id", sliceIds)
+        .eq("user_id", activeUser.id);
+
+      if (histErr) {
+        throw histErr;
+      }
+
+      const { data: deletedRows, error: delErr } = await db
+        .from("leads")
+        .delete()
+        .in("id", sliceIds)
+        .eq("user_id", activeUser.id)
+        .select("id");
+
+      if (delErr) {
+        throw delErr;
+      }
+
+      totalDeleted += deletedRows?.length || 0;
     }
 
-    const { data: deletedRows, error: delErr } = await db
-      .from("leads")
-      .delete()
-      .eq("id", target.id)
-      .eq("user_id", activeUser.id)
-      .select("id");
-
-    if (delErr) {
-      throw delErr;
-    }
-
-    if (!deletedRows || deletedRows.length === 0) {
-      throw new Error("O contato não pôde ser excluído ou não pertence a este usuário.");
+    if (totalDeleted === 0) {
+      throw new Error("Nenhum contato pôde ser excluído. Verifique as permissões RLS.");
     }
 
     $("delete-confirm-dialog").close();
@@ -619,16 +710,125 @@ async function executePermanentDelete() {
       detailDlg.close();
     }
 
-    leadPendingDeletion = null;
+    for (const id of targetIds) {
+      selectedLeadIds.delete(id);
+    }
+    leadsPendingDeletion = [];
     selectedLead = null;
-    toast(`Contato "${target.name}" excluído permanentemente.`);
+
+    toast(
+      totalDeleted === 1
+        ? `Contato "${targets[0].name}" excluído permanentemente.`
+        : `${totalDeleted} contatos excluídos permanentemente.`
+    );
     await loadLeads();
   } catch (err) {
-    errEl.textContent = "Erro ao excluir contato: " + translateSupabaseError(err);
+    errEl.textContent = "Erro ao excluir: " + translateSupabaseError(err);
     console.error("Erro exclusão permanente:", err);
   } finally {
     btn.disabled = false;
     btn.textContent = "Sim, excluir definitivamente";
+  }
+}
+
+async function executeBulkArchiveToggle(nextArchived) {
+  const ids = [...selectedLeadIds];
+  if (!ids.length) return;
+
+  const btn = nextArchived ? $("bulk-archive-btn") : $("bulk-restore-btn");
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = nextArchived ? "Arquivando..." : "Restaurando...";
+
+  try {
+    const activeUser = await ensureActiveUser();
+    const chunkSize = 100;
+    let updatedCount = 0;
+
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const slice = ids.slice(i, i + chunkSize);
+      const { data, error } = await db
+        .from("leads")
+        .update({ archived: nextArchived })
+        .in("id", slice)
+        .eq("user_id", activeUser.id)
+        .select("id");
+
+      if (error) throw error;
+      updatedCount += data?.length || 0;
+    }
+
+    await addHistoryBatch(
+      ids,
+      nextArchived ? "Lead arquivado em lote" : "Lead restaurado em lote"
+    );
+
+    selectedLeadIds.clear();
+    toast(
+      nextArchived
+        ? `${updatedCount} contato(s) arquivado(s).`
+        : `${updatedCount} contato(s) restaurado(s) para ativos.`
+    );
+    await loadLeads();
+  } catch (err) {
+    toast("Erro na operação em lote: " + translateSupabaseError(err));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+async function executeBulkStatusUpdate() {
+  const ids = [...selectedLeadIds];
+  const nextStatus = $("bulk-status-select").value;
+  if (!ids.length) return;
+  if (!nextStatus || !VALID_STATUSES.includes(nextStatus)) {
+    toast("Escolha um status válido antes de aplicar.");
+    return;
+  }
+
+  const btn = $("bulk-apply-status-btn");
+  btn.disabled = true;
+  btn.textContent = "Aplicando...";
+
+  try {
+    const activeUser = await ensureActiveUser();
+    const chunkSize = 100;
+    let updatedCount = 0;
+
+    const updatePayload = { status: nextStatus };
+    if (nextStatus === "Mensagem enviada") {
+      updatePayload.last_contacted_at = new Date().toISOString();
+    }
+
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const slice = ids.slice(i, i + chunkSize);
+      const { data, error } = await db
+        .from("leads")
+        .update(updatePayload)
+        .in("id", slice)
+        .eq("user_id", activeUser.id)
+        .select("id");
+
+      if (error) throw error;
+      updatedCount += data?.length || 0;
+    }
+
+    await addHistoryBatch(
+      ids,
+      "Status alterado em lote",
+      `Novo status: ${nextStatus}`
+    );
+
+    $("bulk-status-select").value = "";
+    selectedLeadIds.clear();
+    toast(`Status "${nextStatus}" aplicado a ${updatedCount} contato(s).`);
+    await loadLeads();
+  } catch (err) {
+    toast("Erro ao atualizar status em lote: " + translateSupabaseError(err));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Aplicar status";
   }
 }
 
@@ -725,7 +925,7 @@ async function openLeadDetails(id) {
   };
 
   $("detail-delete").onclick = () => {
-    openDeleteConfirm(l.id);
+    openDeleteConfirm([l.id]);
   };
 
   $("detail-history").innerHTML = '<p class="tiny">Carregando histórico...</p>';
@@ -947,10 +1147,6 @@ function parseSelectedSheet(sheetName) {
   updateImportPreview();
 }
 
-/**
- * Classifica cada linha da planilha usando os contatos atualizados do banco (ativos + arquivados).
- * A verificação de duplicidade é obrigatória e baseada no telefone normalizado.
- */
 function buildPreparedImportList(currentDbLeads) {
   const colName = $("map-name").value;
   const colPhone = $("map-phone").value;
@@ -997,7 +1193,7 @@ function buildPreparedImportList(currentDbLeads) {
 
     const archived = Boolean(archiveDiscarded && /^descartado$/i.test(prevStatus));
 
-    let category = "valid"; // valid | invalid | duplicate_db | duplicate_sheet
+    let category = "valid";
     let skipReason = "";
 
     if (!name && !digits) {
@@ -1127,12 +1323,10 @@ async function executeBatchImport() {
   progressEl.textContent = "Validando sessão e sincronizando registros existentes no Supabase...";
 
   try {
-    // 1. Garante sessão válida e consulta o banco antes de iniciar
     const activeUser = await ensureActiveUser();
     const freshLeads = await fetchAllUserLeadsFromDb();
     leads = freshLeads;
 
-    // 2. Recalcula toda a planilha contra a base atualizada do banco
     const list = buildPreparedImportList(freshLeads);
     const toInsert = list.filter((x) => x.category === "valid");
     const dupDbRows = list.filter((x) => x.category === "duplicate_db");
@@ -1185,7 +1379,6 @@ async function executeBatchImport() {
 
         await db.from("lead_history").insert(historyRows);
       } else {
-        // Fallback linha a linha se o lote falhar, salvando os válidos e isolando o registro com problema
         for (const item of slice) {
           const singlePayload = {
             user_id: activeUser.id,
@@ -1404,6 +1597,7 @@ function bindEvents() {
     if (db) await db.auth.signOut();
     user = null;
     leads = [];
+    selectedLeadIds.clear();
     showScreen("login-screen");
     toast("Sessão encerrada.");
   };
@@ -1430,6 +1624,7 @@ function bindEvents() {
   });
 
   $("show-archived").addEventListener("change", () => {
+    selectedLeadIds.clear();
     visibleLeadsLimit = LEADS_PAGE_SIZE;
     renderLeads();
   });
@@ -1447,6 +1642,55 @@ function bindEvents() {
     renderLeads();
   });
 
+  // Eventos da barra de ações em lote
+  $("bulk-select-all-filtered").addEventListener("click", () => {
+    for (const item of currentFilteredLeads) {
+      selectedLeadIds.add(item.id);
+    }
+    renderLeads();
+  });
+
+  $("bulk-clear-selection").addEventListener("click", () => {
+    selectedLeadIds.clear();
+    renderLeads();
+  });
+
+  $("bulk-apply-status-btn").addEventListener("click", executeBulkStatusUpdate);
+  $("bulk-archive-btn").addEventListener("click", () => executeBulkArchiveToggle(true));
+  $("bulk-restore-btn").addEventListener("click", () => executeBulkArchiveToggle(false));
+  $("bulk-delete-btn").addEventListener("click", () => {
+    openDeleteConfirm([...selectedLeadIds]);
+  });
+
+  // Delegação de checkboxes na tabela de leads
+  $("leads-table").addEventListener("change", (e) => {
+    if (e.target.id === "select-all-visible-checkbox") {
+      const visibleSlice = currentFilteredLeads.slice(0, visibleLeadsLimit);
+      if (e.target.checked) {
+        for (const item of visibleSlice) {
+          selectedLeadIds.add(item.id);
+        }
+      } else {
+        for (const item of visibleSlice) {
+          selectedLeadIds.delete(item.id);
+        }
+      }
+      renderLeads();
+      return;
+    }
+
+    const rowCheckbox = e.target.closest(".lead-row-checkbox");
+    if (rowCheckbox) {
+      const id = rowCheckbox.dataset.selectId;
+      if (rowCheckbox.checked) {
+        selectedLeadIds.add(id);
+      } else {
+        selectedLeadIds.delete(id);
+      }
+      renderLeads();
+    }
+  });
+
   const handleTableClick = (e) => {
     const detailBtn = e.target.closest("[data-detail]");
     if (detailBtn) {
@@ -1455,7 +1699,7 @@ function bindEvents() {
     }
     const delBtn = e.target.closest("[data-delete]");
     if (delBtn) {
-      openDeleteConfirm(delBtn.dataset.delete);
+      openDeleteConfirm([delBtn.dataset.delete]);
       return;
     }
     const waBtn = e.target.closest("[data-wa]");

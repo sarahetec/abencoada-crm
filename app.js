@@ -15,40 +15,27 @@ const VALID_STATUSES = [
 
 const VALID_DEVELOPMENTS = ["Dom Parque", "Dom Barueri", "Outro"];
 
-// Lista oficial dos 67 DDDs válidos do Brasil (Anatel)
-const VALID_BR_DDDS = new Set([
-  11, 12, 13, 14, 15, 16, 17, 18, 19,
-  21, 22, 24, 27, 28,
-  31, 32, 33, 34, 35, 37, 38,
-  41, 42, 43, 44, 45, 46, 47, 48, 49,
-  51, 53, 54, 55,
-  61, 62, 63, 64, 65, 66, 67, 68, 69,
-  71, 73, 74, 75, 77, 79,
-  81, 82, 83, 84, 85, 86, 87, 88, 89,
-  91, 92, 93, 94, 95, 96, 97, 98, 99
-]);
-
 const MESSAGES = [
   [1, "Primeira abordagem", "Olá! Tudo bem? 😊 Sou assistente da corretora Abençoada. Recebemos seu interesse no empreendimento Dom Parque, em Barueri, e estou entrando em contato para te apresentar esse projeto! Gostaria de saber: você teria disponibilidade para conhecer o empreendimento esta semana?"],
-  [2, "Cliente interessado", "Que bom saber do seu interesse! 😊 Para organizar o melhor atendimento, gostaria de entender como prefere conhecer o empreendimento: presencialmente, por videochamada ou por telefone?"],
-  [3, "Não pode visitar", "Sem problemas! 😊 Podemos conversar por telefone ou WhatsApp para eu te apresentar melhor o projeto. Qual seria o melhor horário para você?"],
-  [4, "Oferecer horários", "Tenho algumas opções de horário para conversarmos: manhã (9h às 11h), horário de almoço (12h às 14h), tarde (15h às 17h) ou noite (18h às 20h). Qual período funciona melhor para você? Vou confirmar a disponibilidade antes de agendar."],
-  [5, "Prefere WhatsApp", "Claro! Podemos conversar por aqui mesmo. 😊 Gostaria de reservar alguns minutinhos para apresentar o projeto e entender o que você procura. Você consegue conversar hoje? Qual horário seria melhor?"],
-  [6, "Prefere telefone", "Perfeito! 😊 Para nossa ligação, você prefere o período da manhã ou da tarde? Assim consigo organizar o melhor horário."],
-  [7, "Prefere videochamada", "Ótimo! Podemos fazer uma videochamada pelo WhatsApp para apresentar o empreendimento. Qual horário fica melhor para você?"],
-  [8, "Sem tempo", "Entendo perfeitamente! Podemos fazer uma conversa rápida, de 5 a 10 minutos, só para apresentar os principais pontos. Qual período costuma ser mais tranquilo para você?"],
-  [9, "Pergunta sobre preço", "Os valores e condições podem variar conforme a opção escolhida. Para te orientar corretamente, podemos organizar uma conversa rápida e entender o que você procura. Qual seria o melhor horário?"],
-  [10, "Pergunta sobre disponibilidade", "Posso consultar as opções disponíveis para você. A corretora consegue apresentar os planos e verificar as unidades. Podemos conversar hoje para entender melhor o que você procura?"],
+  [2, "Cliente interessado", "Olá! Que bom saber do seu interesse! 😊 Para organizar o melhor atendimento, gostaria de entender como prefere conhecer o empreendimento: presencialmente, por videochamada ou por telefone?"],
+  [3, "Não pode visitar", "Olá! Sem problemas! 😊 Podemos conversar por telefone ou WhatsApp para eu te apresentar melhor o projeto. Qual seria o melhor horário para você?"],
+  [4, "Oferecer horários", "Olá! Tenho algumas opções de horário para conversarmos: manhã (9h às 11h), horário de almoço (12h às 14h), tarde (15h às 17h) ou noite (18h às 20h). Qual período funciona melhor para você? Vou confirmar a disponibilidade antes de agendar."],
+  [5, "Prefere WhatsApp", "Olá! Claro! Podemos conversar por aqui mesmo. 😊 Gostaria de reservar alguns minutinhos para apresentar o projeto e entender o que você procura. Você consegue conversar hoje? Qual horário seria melhor?"],
+  [6, "Prefere telefone", "Olá! Perfeito! 😊 Para nossa ligação, você prefere o período da manhã ou da tarde? Assim consigo organizar o melhor horário."],
+  [7, "Prefere videochamada", "Olá! Ótimo! Podemos fazer uma videochamada pelo WhatsApp para apresentar o empreendimento. Qual horário fica melhor para você?"],
+  [8, "Sem tempo", "Olá! Entendo perfeitamente! Podemos fazer uma conversa rápida, de 5 a 10 minutos, só para apresentar os principais pontos. Qual período costuma ser mais tranquilo para você?"],
+  [9, "Pergunta sobre preço", "Olá! Os valores e condições podem variar conforme a opção escolhida. Para te orientar corretamente, podemos organizar uma conversa rápida e entender o que você procura. Qual seria o melhor horário?"],
+  [10, "Pergunta sobre disponibilidade", "Olá! Posso consultar as opções disponíveis para você. A corretora consegue apresentar os planos e verificar as unidades. Podemos conversar hoje para entender melhor o que você procura?"],
   [11, "Visualizou e não respondeu", "Olá! Tudo bem? Passando para saber se conseguiu ver minha mensagem anterior e se ainda tem interesse em conhecer o Dom Parque. Se preferir, podemos combinar um atendimento rápido, sem compromisso. 😊"],
   [12, "Segunda tentativa", "Olá! Tudo bem? Estou retomando nosso contato sobre o Dom Parque. Gostaria de saber se ainda tem interesse em conhecer o empreendimento. Podemos conversar por telefone, videochamada ou WhatsApp, como preferir. 😊"],
-  [13, "Vai pensar", "Claro, fique à vontade para avaliar com calma! 😊 Se ajudar, podemos fazer uma conversa rápida para você conhecer melhor o projeto antes de decidir."],
-  [14, "Outro momento", "Sem problemas! Podemos combinar para outro dia. Qual dia da próxima semana costuma ser melhor para você?"],
+  [13, "Vai pensar", "Olá! Claro, fique à vontade para avaliar com calma! 😊 Se ajudar, podemos fazer uma conversa rápida para você conhecer melhor o projeto antes de decidir."],
+  [14, "Outro momento", "Olá! Sem problemas! Podemos combinar para outro dia. Qual dia da próxima semana costuma ser melhor para você?"],
   [15, "Confirmação de visita", "Olá! 😊 Passando para confirmar nossa visita ao Dom Parque.\n\n📅 Data: [DATA]\n⏰ Horário: [HORÁRIO]\n\nSerá um prazer receber você!"],
   [16, "Confirmação de atendimento", "Olá! 😊 Confirmando nosso atendimento:\n\n📅 Data: [DATA]\n⏰ Horário: [HORÁRIO]\n📍 Modalidade: [LIGAÇÃO / VIDEOCHAMADA / WHATSAPP]\n\nAté lá!"],
   [17, "Não conseguiu contato", "Olá! Tudo bem? Tentei entrar em contato, mas não conseguimos conversar. Qual seria o melhor horário para tentar novamente? 😊"],
-  [18, "Convite após conversa", "Foi muito bom conversar com você! 😊 Que tal agendarmos uma visita para conhecer o Dom Parque pessoalmente? Assim você consegue entender melhor o projeto."],
-  [19, "Interessado, mas indeciso", "Entendo! É importante avaliar com tranquilidade. Se quiser, posso organizar uma conversa com a corretora para esclarecer suas dúvidas e apresentar as opções disponíveis."],
-  [20, "Encerramento cordial", "Agradeço pela atenção e pelo tempo! 😊 Se surgir interesse ou alguma dúvida sobre o Dom Parque, fico à disposição. Tenha um ótimo dia!"]
+  [18, "Convite após conversa", "Olá! Foi muito bom conversar com você! 😊 Que tal agendarmos uma visita para conhecer o Dom Parque pessoalmente? Assim você consegue entender melhor o projeto."],
+  [19, "Interessado, mas indeciso", "Olá! Entendo, é importante avaliar com tranquilidade. Se quiser, posso organizar uma conversa com a corretora para esclarecer suas dúvidas e apresentar as opções disponíveis."],
+  [20, "Encerramento cordial", "Olá! Agradeço pela atenção e pelo tempo! 😊 Se surgir interesse ou alguma dúvida sobre o Dom Parque, fico à disposição. Tenha um ótimo dia!"]
 ];
 
 const LEADS_PAGE_SIZE = 100;
@@ -86,7 +73,7 @@ const toast = (msg) => {
   t.textContent = msg;
   t.classList.add("show");
   clearTimeout(t._timer);
-  t._timer = setTimeout(() => t.classList.remove("show"), 4200);
+  t._timer = setTimeout(() => t.classList.remove("show"), 3500);
 };
 
 const slug = (s) =>
@@ -96,9 +83,13 @@ const slug = (s) =>
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, "-");
 
-/**
- * Extrai e normaliza o telefone brasileiro para 10 ou 11 dígitos nacionais (DDD + número).
- */
+function getFirstName(fullName) {
+  const clean = sanitizeText(fullName);
+  if (!clean) return "";
+  const first = clean.split(/\s+/)[0];
+  return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
+}
+
 function phoneDigits(raw) {
   let text = sanitizeText(raw);
   if (!text) return "";
@@ -119,14 +110,8 @@ function phoneDigits(raw) {
     d = d.slice(2);
   }
 
-  while (d.startsWith("55") && d.length >= 12) {
-    const candidate = d.slice(2);
-    const ddd = Number(candidate.slice(0, 2));
-    if (VALID_BR_DDDS.has(ddd) && (candidate.length === 10 || candidate.length === 11 || candidate.startsWith("55"))) {
-      d = candidate;
-    } else {
-      break;
-    }
+  while (d.startsWith("55") && (d.length === 12 || d.length === 13 || d.length === 14)) {
+    d = d.slice(2);
   }
 
   if (d.startsWith("0") && (d.length === 11 || d.length === 12)) {
@@ -134,13 +119,6 @@ function phoneDigits(raw) {
   }
 
   return d;
-}
-
-function isValidBrazilianPhone(raw) {
-  const digits = phoneDigits(raw);
-  if (digits.length !== 10 && digits.length !== 11) return false;
-  const ddd = Number(digits.slice(0, 2));
-  return VALID_BR_DDDS.has(ddd);
 }
 
 function normalizePhoneForStorage(raw) {
@@ -156,6 +134,18 @@ function normalizePhoneForStorage(raw) {
 
 function adaptMessageForLead(msgText, lead) {
   let text = String(msgText || MESSAGES[0][2]);
+  const firstName = getFirstName(lead?.name);
+
+  if (firstName) {
+    if (text.includes("[NOME]")) {
+      text = text.replace(/\[NOME\]/g, firstName);
+    } else if (text.startsWith("Olá!")) {
+      text = text.replace(/^Olá!/, `Olá, ${firstName}!`);
+    }
+  } else {
+    text = text.replace(/,?\s*\[NOME\]/g, "");
+  }
+
   if (lead?.development && lead.development !== "Dom Parque") {
     if (lead.development === "Dom Barueri") {
       text = text.replace(/Dom Parque/g, "Dom Barueri");
@@ -166,31 +156,28 @@ function adaptMessageForLead(msgText, lead) {
       text = text.replace(/sobre o Dom Parque/g, "sobre o empreendimento");
     }
   }
+
   return text;
 }
 
 function buildWhatsAppWebUrl(lead, rawMessage) {
-  if (!isValidBrazilianPhone(lead?.phone)) {
+  const digits = phoneDigits(lead?.phone);
+  if (!digits || digits.length < 8) {
     return null;
   }
-  const nationalDigits = phoneDigits(lead.phone);
-  const fullInternationalPhone = `55${nationalDigits}`;
+  const fullPhone = digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`;
   const message = adaptMessageForLead(rawMessage, lead);
-  return {
-    url: `https://web.whatsapp.com/send?phone=${fullInternationalPhone}&text=${encodeURIComponent(message)}`,
-    phoneSent: fullInternationalPhone
-  };
+  return `https://web.whatsapp.com/send?phone=${fullPhone}&text=${encodeURIComponent(message)}`;
 }
 
 function openWhatsAppForLead(lead, msgIndex = 0) {
   const template = MESSAGES[msgIndex]?.[2] || MESSAGES[0][2];
-  const result = buildWhatsAppWebUrl(lead, template);
-  if (!result) {
-    toast(`O telefone "${lead?.phone || ""}" tem DDD inexistente ou está incompleto. Clique em Detalhes > Editar para corrigir.`);
+  const url = buildWhatsAppWebUrl(lead, template);
+  if (!url) {
+    toast("Este contato não possui números suficientes no telefone.");
     return;
   }
-  toast(`Abrindo WhatsApp Web para +${result.phoneSent}...`);
-  window.open(result.url, "_blank", "noopener,noreferrer");
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 function translateSupabaseError(err) {
@@ -373,7 +360,7 @@ function renderDashboard() {
                 <td><span class="status ${slug(x.status)}">${esc(x.status)}</span></td>
                 <td>${esc(formatDateBR(x.next_action_date))}</td>
                 <td class="row-actions">
-                  <button type="button" class="table-action wa-inline" data-wa="${esc(x.id)}">WhatsApp Web</button>
+                  <button type="button" class="table-action wa-inline" data-wa="${esc(x.id)}">WhatsApp</button>
                   <button type="button" class="table-action" data-detail="${esc(x.id)}">Abrir</button>
                 </td>
               </tr>`
@@ -483,7 +470,6 @@ function renderLeads() {
           ${visibleSlice
             .map((x) => {
               const isSelected = selectedLeadIds.has(x.id);
-              const phoneOk = isValidBrazilianPhone(x.phone);
               return `<tr class="${isSelected ? "row-selected" : ""}">
                 <td class="col-check">
                   <input type="checkbox" class="lead-row-checkbox" data-select-id="${esc(x.id)}" ${isSelected ? "checked" : ""} aria-label="Selecionar ${esc(x.name)}">
@@ -492,15 +478,12 @@ function renderLeads() {
                   <b>${esc(x.name)}</b>
                   ${x.archived ? '<span class="badge-archived">Arquivado</span>' : ""}
                 </td>
-                <td>
-                  ${esc(normalizePhoneForStorage(x.phone))}
-                  ${!phoneOk ? '<span class="tag-skip" title="DDD inválido ou número incompleto — edite para corrigir"> ⚠️ DDD inválido</span>' : ""}
-                </td>
+                <td>${esc(x.phone)}</td>
                 <td>${esc(x.development)}</td>
                 <td><span class="status ${slug(x.status)}">${esc(x.status)}</span></td>
                 <td>${esc(formatDateBR(x.next_action_date))}</td>
                 <td class="row-actions">
-                  <button type="button" class="table-action wa-inline" data-wa="${esc(x.id)}" title="Abrir no WhatsApp Web">WhatsApp Web</button>
+                  <button type="button" class="table-action wa-inline" data-wa="${esc(x.id)}" title="Abrir conversa no WhatsApp Web">WhatsApp</button>
                   <button type="button" class="table-action" data-detail="${esc(x.id)}">Detalhes</button>
                   <button type="button" class="table-action del-inline" data-delete="${esc(x.id)}" title="Excluir permanentemente">Excluir</button>
                 </td>
@@ -530,7 +513,7 @@ function renderMessages() {
           <h3>${esc(m[1])}</h3>
           <p>${esc(m[2])}</p>
           <div class="message-actions">
-            <span class="tiny">Modelo de atendimento</span>
+            <span class="tiny">O nome do cliente entra automaticamente ao enviar</span>
             <button type="button" class="secondary" data-copy="${m[0]}">Copiar texto</button>
           </div>
         </article>`
@@ -545,7 +528,7 @@ function openLeadForm(lead = null) {
   $("lead-id").value = lead?.id || "";
   $("dialog-title").textContent = lead ? "Editar lead" : "Novo lead";
   $("lead-name").value = lead?.name || "";
-  $("lead-phone").value = lead ? normalizePhoneForStorage(lead.phone) : "";
+  $("lead-phone").value = lead?.phone || "";
   $("lead-development").value = VALID_DEVELOPMENTS.includes(lead?.development)
     ? lead.development
     : "Dom Parque";
@@ -573,12 +556,11 @@ async function saveLead(e) {
     return;
   }
 
-  if (!isValidBrazilianPhone(rawPhone)) {
-    errEl.textContent = "Informe um telefone brasileiro válido com DDD real (ex.: (11) 99999-9999).";
+  const digits = phoneDigits(rawPhone);
+  if (digits.length < 8) {
+    errEl.textContent = "Informe um telefone válido com DDD.";
     return;
   }
-
-  const digits = phoneDigits(rawPhone);
 
   btn.disabled = true;
   btn.textContent = "Verificando...";
@@ -672,7 +654,7 @@ function openDeleteConfirm(leadIds) {
       "Você está prestes a excluir definitivamente o contato abaixo e <b>todo o seu histórico de atividades</b>. Esta ação não pode ser desfeita.";
     $("delete-confirm-summary").innerHTML = `
       <div><strong>Nome:</strong> ${esc(lead.name)}</div>
-      <div><strong>Telefone:</strong> ${esc(normalizePhoneForStorage(lead.phone))}</div>
+      <div><strong>Telefone:</strong> ${esc(lead.phone)}</div>
       <div><strong>Empreendimento:</strong> ${esc(lead.development)}</div>
       <div><strong>Situação atual:</strong> ${lead.archived ? "Arquivado" : "Ativo"} (${esc(lead.status)})</div>
     `;
@@ -685,7 +667,7 @@ function openDeleteConfirm(leadIds) {
       <ul>
         ${targets
           .slice(0, 30)
-          .map((l) => `<li>${esc(l.name)} — ${esc(normalizePhoneForStorage(l.phone))} (${l.archived ? "Arquivado" : "Ativo"})</li>`)
+          .map((l) => `<li>${esc(l.name)} — ${esc(l.phone)} (${l.archived ? "Arquivado" : "Ativo"})</li>`)
           .join("")}
         ${targets.length > 30 ? `<li><i>... e mais ${targets.length - 30} contato(s).</i></li>` : ""}
       </ul>
@@ -885,18 +867,9 @@ async function openLeadDetails(id) {
   if (!selectedLead) return;
   const l = selectedLead;
 
-  const formattedDisplayPhone = normalizePhoneForStorage(l.phone);
-  const waDigitsPreview = phoneDigits(l.phone);
-  const isPhoneValid = isValidBrazilianPhone(l.phone);
-
   $("detail-name").textContent = l.name;
   $("detail-content").innerHTML = [
-    [
-      "Telefone",
-      isPhoneValid
-        ? `${formattedDisplayPhone} → Destino WhatsApp Web: +55 ${waDigitsPreview}`
-        : `${l.phone} (⚠️ DDD inválido — clique em Editar abaixo para corrigir o número)`
-    ],
+    ["Telefone", l.phone],
     ["Empreendimento", l.development],
     ["Status", l.status],
     ["Preferência", l.preferred_modality || "Não definida"],
@@ -1260,9 +1233,9 @@ function buildPreparedImportList(currentDbLeads) {
     } else if (!name) {
       category = "invalid";
       skipReason = "Nome ausente";
-    } else if (!isValidBrazilianPhone(rawPhone)) {
+    } else if (!digits || digits.length < 8) {
       category = "invalid";
-      skipReason = `Telefone ou DDD inválido (${rawPhone || "vazio"})`;
+      skipReason = "Telefone ausente ou inválido";
     } else if (existingMap.has(digits)) {
       const existing = existingMap.get(digits);
       category = "duplicate_db";

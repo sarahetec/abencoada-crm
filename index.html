@@ -113,7 +113,7 @@
               <p class="eyebrow">ACOMPANHAMENTO</p>
               <h2>Próximas ações</h2>
             </div>
-            <button type="button" class="text-btn" data-goto="leads">Ver todos os leads →</button>
+            <button type="button" class="text-btn" data-goto="leads">Ver todos los leads →</button>
           </div>
           <div id="upcoming-list" class="table-wrap"></div>
         </div>
@@ -132,6 +132,23 @@
           <label class="check-label">
             <input id="show-archived" type="checkbox"> Mostrar arquivados
           </label>
+        </div>
+
+        <!-- ALERTA DE SUGESTÃO DE NOVO EMPREENDIMENTO (ADICIONADO AQUI) -->
+        <div id="development-suggestion-banner" class="panel hidden" style="background: var(--warning-bg); border-color: #ffe0b2; margin-bottom: 1.5rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <span style="font-size: 1.5rem;">💡</span>
+              <div>
+                <h3 style="font-size: 1.05rem; color: var(--warning); margin-bottom: 0.15rem;">Sugestão de Novo Empreendimento</h3>
+                <p id="suggestion-text" style="font-size: 0.88rem; color: var(--text); margin: 0;"></p>
+              </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="primary small-btn" id="btn-accept-suggestion">Fixar no Menu</button>
+              <button class="ghost small-btn" id="btn-dismiss-suggestion">Dispensar</button>
+            </div>
+          </div>
         </div>
 
         <div class="leads-summary-bar">

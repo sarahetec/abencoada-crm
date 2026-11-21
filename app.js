@@ -2,21 +2,26 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const $ = (id) => document.getElementById(id);
 
-const VALID_STATUSES = [
+const DEFAULT_STATUSES = [
   "Pendente",
   "Mensagem enviada",
   "Retornar depois",
   "Visita marcada",
   "Visita realizada",
   "Sem resposta",
+  "Sem ZAP — somente ligação",
   "Não tem interesse",
   "Convertido"
 ];
 
-const VALID_DEVELOPMENTS = ["Dom Parque", "Dom Barueri", "Outro"];
+const DEFAULT_DEVELOPMENTS = [
+  { name: "Dom Parque", is_default: true },
+  { name: "Dom Barueri", is_default: false },
+  { name: "Outro", is_default: false }
+];
 
-const MESSAGES = [
-  [1, "Primeira abordagem", "Olá, *[NOME]*! Tudo bem? \n\nSou assistente da Elisangela, sua corretora *Abençoada*! 🏡\n\nVi que você demonstrou interesse no *Dom Parque*, em Barueri, e estou entrando em contato para te apresentar melhor o empreendimento.\n\nPosso te ajudar com algumas informações por aqui e, se preferir, podemos organizar uma ligação com a Elisangela ou agendar uma visita.\n\nO que seria melhor para você? 😊"],
+const DEFAULT_MESSAGES = [
+  [1, "Primeira abordagem", "Olá, [NOME]! Tudo bem? 😊 Sou assistente da corretora Abençoada. Recebemos seu interesse no empreendimento [EMPREENDIMENTO], em Barueri, e estou entrando em contato para te apresentar esse projeto! Gostaria de saber: você teria disponibilidade para conhecer o empreendimento esta semana?"],
   [2, "Cliente interessado", "Olá, [NOME]! Que bom saber do seu interesse! 😊 Para organizar o melhor atendimento, gostaria de entender como prefere conhecer o empreendimento: presencialmente, por videochamada ou por telefone?"],
   [3, "Não pode visitar", "Olá, [NOME]! Sem problemas! 😊 Podemos conversar por telefone ou WhatsApp para eu te apresentar melhor o projeto. Qual seria o melhor horário para você?"],
   [4, "Oferecer horários", "Olá, [NOME]! Tenho algumas opções de horário para conversarmos: manhã (9h às 11h), horário de almoço (12h às 14h), tarde (15h às 17h) ou noite (18h às 20h). Qual período funciona melhor para você? Vou confirmar a disponibilidade antes de agendar."],
@@ -26,16 +31,16 @@ const MESSAGES = [
   [8, "Sem tempo", "Olá, [NOME]! Entendo perfeitamente! Podemos fazer uma conversa rápida, de 5 a 10 minutos, só para apresentar os principais pontos. Qual período costuma ser mais tranquilo para você?"],
   [9, "Pergunta sobre preço", "Olá, [NOME]! Os valores e condições podem variar conforme a opção escolhida. Para te orientar corretamente, podemos organizar uma conversa rápida e entender o que você procura. Qual seria o melhor horário?"],
   [10, "Pergunta sobre disponibilidade", "Olá, [NOME]! Posso consultar as opções disponíveis para você. A corretora consegue apresentar os planos e verificar as unidades. Podemos conversar hoje para entender melhor o que você procura?"],
-  [11, "Visualizou e não respondeu", "Olá, [NOME]! Tudo bem? Passando para saber se conseguiu ver minha mensagem anterior e se ainda tem interesse em conhecer o Dom Parque. Se preferir, podemos combinar um atendimento rápido, sem compromisso. 😊"],
-  [12, "Segunda tentativa", "Olá, [NOME]! Tudo bem? Estou retomando nosso contato sobre o Dom Parque. Gostaria de saber se ainda tem interesse em conhecer o empreendimento. Podemos conversar por telefone, videochamada ou WhatsApp, como preferir. 😊"],
+  [11, "Visualizou e não respondeu", "Olá, [NOME]! Tudo bem? Passando para saber se conseguiu ver minha mensagem anterior e se ainda tem interesse em conhecer o [EMPREENDIMENTO]. Se preferir, podemos combinar um atendimento rápido, sem compromisso. 😊"],
+  [12, "Segunda tentativa", "Olá, [NOME]! Tudo bem? Estou retomando nosso contato sobre o [EMPREENDIMENTO]. Gostaria de saber se ainda tem interesse em conhecer o empreendimento. Podemos conversar por telefone, videochamada ou WhatsApp, como preferir. 😊"],
   [13, "Vai pensar", "Olá, [NOME]! Claro, fique à vontade para avaliar com calma! 😊 Se ajudar, podemos fazer uma conversa rápida para você conhecer melhor o projeto antes de decidir."],
   [14, "Outro momento", "Olá, [NOME]! Sem problemas! Podemos combinar para outro dia. Qual dia da próxima semana costuma ser melhor para você?"],
-  [15, "Confirmação de visita", "Olá, [NOME]! 😊 Passando para confirmar nossa visita ao Dom Parque.\n\n📅 Data: [DATA]\n⏰ Horário: [HORÁRIO]\n\nSerá um prazer receber você!"],
+  [15, "Confirmação de visita", "Olá, [NOME]! 😊 Passando para confirmar nossa visita ao [EMPREENDIMENTO].\n\n📅 Data: [DATA]\n⏰ Horário: [HORÁRIO]\n\nSerá um prazer receber você!"],
   [16, "Confirmação de atendimento", "Olá, [NOME]! 😊 Confirmando nosso atendimento:\n\n📅 Data: [DATA]\n⏰ Horário: [HORÁRIO]\n📍 Modalidade: [LIGAÇÃO / VIDEOCHAMADA / WHATSAPP]\n\nAté lá!"],
   [17, "Não conseguiu contato", "Olá, [NOME]! Tudo bem? Tentei entrar em contato, mas não conseguimos conversar. Qual seria o melhor horário para tentar novamente? 😊"],
-  [18, "Convite após conversa", "Olá, [NOME]! Foi muito bom conversar com você! 😊 Que tal agendarmos uma visita para conhecer o Dom Parque pessoalmente? Assim você consegue entender melhor o projeto."],
+  [18, "Convite após conversa", "Olá, [NOME]! Foi muito bom conversar com você! 😊 Que tal agendarmos uma visita para conhecer o [EMPREENDIMENTO] pessoalmente? Assim você consegue entender melhor o projeto."],
   [19, "Interessado, mas indeciso", "Olá, [NOME]! Entendo, é importante avaliar com tranquilidade. Se quiser, posso organizar uma conversa com a corretora para esclarecer suas dúvidas e apresentar as opções disponíveis."],
-  [20, "Encerramento cordial", "Olá, [NOME]! Agradeço pela atenção e pelo tempo! 😊 Se surgir interesse ou alguma dúvida sobre o Dom Parque, fico à disposição. Tenha um ótimo dia!"]
+  [20, "Encerramento cordial", "Olá, [NOME]! Agradeço pela atenção e pelo tempo! 😊 Se surgir interesse ou alguma dúvida sobre o [EMPREENDIMENTO], fico à disposição. Tenha um ótimo dia!"]
 ];
 
 const LEADS_PAGE_SIZE = 100;
@@ -43,8 +48,13 @@ const LEADS_PAGE_SIZE = 100;
 let db = null;
 let user = null;
 let leads = [];
+let customStatuses = [];
+let customDevelopments = [];
+let customMessages = [];
+
 let selectedLead = null;
 let leadsPendingDeletion = [];
+let selectionMode = false;
 let selectedLeadIds = new Set();
 let currentFilteredLeads = [];
 let currentWorkbook = null;
@@ -81,7 +91,26 @@ const slug = (s) =>
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, "-");
+    .replace(/[^a-z0-9]+/g, "-");
+
+function getStatusNames() {
+  return customStatuses.length
+    ? customStatuses.map((s) => s.name)
+    : [...DEFAULT_STATUSES];
+}
+
+function getDevelopmentNames() {
+  return customDevelopments.length
+    ? customDevelopments.map((d) => d.name)
+    : DEFAULT_DEVELOPMENTS.map((d) => d.name);
+}
+
+function getDefaultDevelopmentName() {
+  const def = customDevelopments.find((d) => d.is_default);
+  if (def) return def.name;
+  const names = getDevelopmentNames();
+  return names[0] || "Dom Parque";
+}
 
 function getFirstName(fullName) {
   const clean = sanitizeText(fullName)
@@ -137,8 +166,9 @@ function normalizePhoneForStorage(raw) {
 }
 
 function adaptMessageForLead(msgText, lead) {
-  let text = String(msgText || MESSAGES[0][2]);
+  let text = String(msgText || customMessages[0]?.content || DEFAULT_MESSAGES[0][2]);
   const firstName = getFirstName(lead?.name);
+  const devName = sanitizeText(lead?.development) || getDefaultDevelopmentName();
 
   if (firstName) {
     text = text.replace(/\[NOME\]/gi, firstName);
@@ -146,15 +176,10 @@ function adaptMessageForLead(msgText, lead) {
     text = text.replace(/,\s*\[NOME\]/gi, "").replace(/\[NOME\]/gi, "");
   }
 
-  if (lead?.development && lead.development !== "Dom Parque") {
-    if (lead.development === "Dom Barueri") {
-      text = text.replace(/Dom Parque/g, "Dom Barueri");
-    } else {
-      text = text.replace(/o empreendimento Dom Parque, em Barueri/g, "o nosso empreendimento");
-      text = text.replace(/ao Dom Parque/g, "ao empreendimento");
-      text = text.replace(/o Dom Parque/g, "o empreendimento");
-      text = text.replace(/sobre o Dom Parque/g, "sobre o empreendimento");
-    }
+  text = text.replace(/\[EMPREENDIMENTO\]/gi, devName);
+
+  if (devName && devName !== "Dom Parque") {
+    text = text.replace(/Dom Parque/g, devName);
   }
 
   return text;
@@ -171,13 +196,12 @@ function buildWhatsAppAppUrl(lead, rawMessage) {
 }
 
 function openWhatsAppForLead(lead, msgIndex = 0) {
-  const template = MESSAGES[msgIndex]?.[2] || MESSAGES[0][2];
+  const template = customMessages[msgIndex]?.content || DEFAULT_MESSAGES[0][2];
   const appUrl = buildWhatsAppAppUrl(lead, template);
   if (!appUrl) {
     toast("Este contato não possui números suficientes no telefone.");
     return;
   }
-  // Redireciona diretamente para o protocolo nativo do App WhatsApp (funciona com tela dividida no tablet)
   window.location.href = appUrl;
 }
 
@@ -194,7 +218,7 @@ function translateSupabaseError(err) {
     return "Permissão negada (RLS). Verifique se você está logado e se executou o SQL de políticas RLS no Supabase.";
   }
   if (msg.includes("relation") && msg.includes("does not exist")) {
-    return "Tabela não encontrada no banco. Execute o script supabase-schema.sql no SQL Editor do Supabase.";
+    return "Tabela não encontrada no banco. Verifique se o SQL das tabelas foi executado no Supabase.";
   }
   if (msg.includes("Invalid login credentials")) {
     return "E-mail ou senha incorretos.";
@@ -222,16 +246,134 @@ async function ensureActiveUser() {
   return user;
 }
 
+/* =========================================================================
+   CARREGAMENTO E SINCRONIZAÇÃO DAS CONFIGURAÇÕES PERSONALIZADAS NO SUPABASE
+   ========================================================================= */
+
+async function loadCustomSettings() {
+  const activeUser = await ensureActiveUser();
+
+  // 1. STATUS
+  const { data: stData, error: stErr } = await db
+    .from("custom_statuses")
+    .select("*")
+    .eq("user_id", activeUser.id)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (stErr) {
+    console.warn("Aviso ao carregar custom_statuses:", stErr.message);
+    customStatuses = DEFAULT_STATUSES.map((name, idx) => ({ id: null, name, position: idx }));
+  } else if (!stData || stData.length === 0) {
+    const seedRows = DEFAULT_STATUSES.map((name, idx) => ({
+      user_id: activeUser.id,
+      name,
+      position: idx
+    }));
+    const { data: insertedSt } = await db.from("custom_statuses").insert(seedRows).select();
+    customStatuses = insertedSt || seedRows;
+  } else {
+    customStatuses = stData;
+  }
+
+  // 2. EMPREENDIMENTOS
+  const { data: devData, error: devErr } = await db
+    .from("custom_developments")
+    .select("*")
+    .eq("user_id", activeUser.id)
+    .order("created_at", { ascending: true });
+
+  if (devErr) {
+    console.warn("Aviso ao carregar custom_developments:", devErr.message);
+    customDevelopments = DEFAULT_DEVELOPMENTS.map((d) => ({ id: null, ...d }));
+  } else if (!devData || devData.length === 0) {
+    const seedDevs = DEFAULT_DEVELOPMENTS.map((d) => ({
+      user_id: activeUser.id,
+      name: d.name,
+      is_default: d.is_default
+    }));
+    const { data: insertedDevs } = await db.from("custom_developments").insert(seedDevs).select();
+    customDevelopments = insertedDevs || seedDevs;
+  } else {
+    customDevelopments = devData;
+  }
+
+  // 3. MENSAGENS
+  const { data: msgData, error: msgErr } = await db
+    .from("custom_messages")
+    .select("*")
+    .eq("user_id", activeUser.id)
+    .order("msg_number", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (msgErr) {
+    console.warn("Aviso ao carregar custom_messages:", msgErr.message);
+    customMessages = DEFAULT_MESSAGES.map(([msg_number, title, content]) => ({
+      id: null,
+      msg_number,
+      title,
+      content
+    }));
+  } else if (!msgData || msgData.length === 0) {
+    const seedMsgs = DEFAULT_MESSAGES.map(([msg_number, title, content]) => ({
+      user_id: activeUser.id,
+      msg_number,
+      title,
+      content
+    }));
+    const { data: insertedMsgs } = await db.from("custom_messages").insert(seedMsgs).select();
+    customMessages = (insertedMsgs || seedMsgs).sort((a, b) => a.msg_number - b.msg_number);
+  } else {
+    customMessages = msgData;
+  }
+
+  syncAllDynamicSelects();
+  renderSettingsView();
+}
+
+function syncAllDynamicSelects() {
+  const statusNames = getStatusNames();
+  const devNames = getDevelopmentNames();
+
+  const fillSelect = (elId, items, firstOptionLabel = null) => {
+    const el = $(elId);
+    if (!el) return;
+    const prev = el.value;
+    el.innerHTML =
+      (firstOptionLabel !== null ? `<option value="">${esc(firstOptionLabel)}</option>` : "") +
+      items.map((name) => `<option value="${esc(name)}">${esc(name)}</option>`).join("");
+    if (prev && items.includes(prev)) {
+      el.value = prev;
+    }
+  };
+
+  fillSelect("status-filter", statusNames, "Todos os status");
+  fillSelect("bulk-status-select", statusNames, "Alterar status para...");
+  fillSelect("lead-status", statusNames);
+
+  fillSelect("development-filter", devNames, "Todos os empreendimentos");
+  fillSelect("bulk-dev-select", devNames, "Alterar empreendimento...");
+  fillSelect("lead-development", devNames);
+
+  const navMsgLabel = $("nav-messages-label");
+  if (navMsgLabel) {
+    navMsgLabel.textContent = `Mensagens (${customMessages.length})`;
+  }
+}
+
+/* =========================================================================
+   HISTÓRICO E LEITURA DE LEADS
+   ========================================================================= */
+
 async function addHistory(leadId, action, details = "") {
   if (!db || !user?.id || !leadId) return;
   try {
-    const { error } = await db.from("lead_history").insert({
+    await db.from("lead_history").insert({
       lead_id: leadId,
       user_id: user.id,
       action: sanitizeText(action),
       details: sanitizeText(details)
     });
-    if (error) console.warn("Aviso ao registrar histórico:", error.message);
   } catch (e) {
     console.warn("Exceção ao registrar histórico:", e);
   }
@@ -269,19 +411,11 @@ async function fetchAllUserLeadsFromDb() {
       .order("created_at", { ascending: false })
       .range(from, from + pageSize - 1);
 
-    if (error) {
-      throw error;
-    }
-
-    if (!data || data.length === 0) {
-      break;
-    }
+    if (error) throw error;
+    if (!data || data.length === 0) break;
 
     allRows.push(...data);
-
-    if (data.length < pageSize) {
-      break;
-    }
+    if (data.length < pageSize) break;
     from += pageSize;
   }
 
@@ -321,12 +455,23 @@ function switchView(viewName) {
     dashboard: "Visão geral",
     leads: "Leads",
     messages: "Biblioteca de mensagens",
+    settings: "Configurações do CRM",
     diagnostics: "Diagnóstico do banco"
   };
   $("page-title").textContent = titles[viewName] || "Abençoada CRM";
 
   if (viewName === "messages") renderMessages();
   if (viewName === "leads") renderLeads();
+  if (viewName === "settings") renderSettingsView();
+}
+
+function switchSettingsTab(tabName) {
+  document.querySelectorAll(".settings-tab").forEach((t) => {
+    t.classList.toggle("active", t.dataset.stab === tabName);
+  });
+  document.querySelectorAll(".settings-pane").forEach((p) => {
+    p.classList.toggle("hidden", p.id !== `stab-${tabName}`);
+  });
 }
 
 function renderDashboard() {
@@ -379,12 +524,28 @@ function formatDateBR(isoDate) {
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
+/* =========================================================================
+   MODO "MARCAR CONTATOS" E RENDERIZAÇÃO DA LISTA DE LEADS
+   ========================================================================= */
+
+function setSelectionMode(active) {
+  selectionMode = Boolean(active);
+  if (!selectionMode) {
+    selectedLeadIds.clear();
+  }
+  const toggleBtn = $("toggle-selection-mode-btn");
+  if (toggleBtn) {
+    toggleBtn.textContent = selectionMode ? "✕ Cancelar marcação" : "☑ Marcar contatos";
+  }
+  renderLeads();
+}
+
 function updateBulkBar() {
   const bar = $("bulk-actions-bar");
   const showArchived = $("show-archived").checked;
   const count = selectedLeadIds.size;
 
-  if (count === 0) {
+  if (!selectionMode && count === 0) {
     bar.classList.add("hidden");
     return;
   }
@@ -456,9 +617,13 @@ function renderLeads() {
     ? `<table>
         <thead>
           <tr>
-            <th class="col-check">
-              <input type="checkbox" id="select-all-visible-checkbox" ${allVisibleSelected ? "checked" : ""} aria-label="Selecionar todos os visíveis">
-            </th>
+            ${
+              selectionMode
+                ? `<th class="col-check">
+                    <input type="checkbox" id="select-all-visible-checkbox" ${allVisibleSelected ? "checked" : ""} aria-label="Selecionar todos os visíveis">
+                  </th>`
+                : ""
+            }
             <th>Nome</th>
             <th>Telefone</th>
             <th>Empreendimento</th>
@@ -472,9 +637,13 @@ function renderLeads() {
             .map((x) => {
               const isSelected = selectedLeadIds.has(x.id);
               return `<tr class="${isSelected ? "row-selected" : ""}">
-                <td class="col-check">
-                  <input type="checkbox" class="lead-row-checkbox" data-select-id="${esc(x.id)}" ${isSelected ? "checked" : ""} aria-label="Selecionar ${esc(x.name)}">
-                </td>
+                ${
+                  selectionMode
+                    ? `<td class="col-check">
+                        <input type="checkbox" class="lead-row-checkbox" data-select-id="${esc(x.id)}" ${isSelected ? "checked" : ""} aria-label="Selecionar ${esc(x.name)}">
+                      </td>`
+                    : ""
+                }
                 <td>
                   <b>${esc(x.name)}</b>
                   ${x.archived ? '<span class="badge-archived">Arquivado</span>' : ""}
@@ -496,33 +665,240 @@ function renderLeads() {
     : '<div class="empty">Nenhum lead encontrado com os filtros atuais.</div>';
 }
 
+/* =========================================================================
+   BIBLIOTECA DE MENSAGENS
+   ========================================================================= */
+
 function renderMessages() {
   const q = $("message-search").value.trim().toLowerCase();
-  const list = MESSAGES.filter(
+  const list = customMessages.filter(
     (m) =>
       !q ||
-      String(m[0]).includes(q) ||
-      m[1].toLowerCase().includes(q) ||
-      m[2].toLowerCase().includes(q)
+      String(m.msg_number).includes(q) ||
+      m.title.toLowerCase().includes(q) ||
+      m.content.toLowerCase().includes(q)
   );
 
   $("message-list").innerHTML =
     list
       .map(
-        (m) => `<article class="message-card">
-          <span class="message-number">MENSAGEM ${String(m[0]).padStart(2, "0")}</span>
-          <h3>${esc(m[1])}</h3>
-          <p>${esc(m[2])}</p>
+        (m, idx) => `<article class="message-card">
+          <span class="message-number">MENSAGEM ${String(m.msg_number).padStart(2, "0")}</span>
+          <h3>${esc(m.title)}</h3>
+          <p>${esc(m.content)}</p>
           <div class="message-actions">
-            <span class="tiny">[NOME] vira o 1º nome do cliente</span>
-            <button type="button" class="secondary" data-copy="${m[0]}">Copiar texto</button>
+            <span class="tiny">Variáveis: [NOME] e [EMPREENDIMENTO]</span>
+            <button type="button" class="secondary" data-copy-idx="${idx}">Copiar texto</button>
           </div>
         </article>`
       )
       .join("") || '<div class="empty">Nenhuma mensagem encontrada.</div>';
 }
 
+/* =========================================================================
+   ÁREA DE CONFIGURAÇÕES (STATUS, EMPREENDIMENTOS E MENSAGENS NO SUPABASE)
+   ========================================================================= */
+
+function renderSettingsView() {
+  // 1. LISTA DE STATUS
+  const stContainer = $("settings-statuses-list");
+  if (stContainer) {
+    stContainer.innerHTML = customStatuses.length
+      ? customStatuses
+          .map(
+            (st, idx) => `<div class="settings-item">
+              <div class="settings-item-info">
+                <strong>${esc(st.name)}</strong>
+                <span class="tiny">Posição #${idx + 1}</span>
+              </div>
+              <div class="settings-item-actions">
+                <button type="button" class="table-action" data-edit-status="${esc(st.id || "")}" data-st-name="${esc(st.name)}">Renomear</button>
+                <button type="button" class="table-action del-inline" data-del-status="${esc(st.id || "")}" data-st-name="${esc(st.name)}">Excluir</button>
+              </div>
+            </div>`
+          )
+          .join("")
+      : '<div class="empty">Nenhum status cadastrado.</div>';
+  }
+
+  // 2. LISTA DE EMPREENDIMENTOS
+  const devContainer = $("settings-devs-list");
+  if (devContainer) {
+    devContainer.innerHTML = customDevelopments.length
+      ? customDevelopments
+          .map(
+            (dev) => `<div class="settings-item">
+              <div class="settings-item-info">
+                <div>
+                  <strong>${esc(dev.name)}</strong>
+                  ${dev.is_default ? '<span class="badge-default">Padrão para novos leads</span>' : ""}
+                </div>
+              </div>
+              <div class="settings-item-actions">
+                ${
+                  !dev.is_default && dev.id
+                    ? `<button type="button" class="table-action" data-default-dev="${esc(dev.id)}">Definir como padrão</button>`
+                    : ""
+                }
+                <button type="button" class="table-action" data-edit-dev="${esc(dev.id || "")}" data-dev-name="${esc(dev.name)}">Renomear</button>
+                <button type="button" class="table-action del-inline" data-del-dev="${esc(dev.id || "")}" data-dev-name="${esc(dev.name)}">Excluir</button>
+              </div>
+            </div>`
+          )
+          .join("")
+      : '<div class="empty">Nenhum empreendimento cadastrado.</div>';
+  }
+
+  // 3. LISTA DE MENSAGENS EDITÁVEIS
+  const msgContainer = $("settings-messages-list");
+  if (msgContainer) {
+    msgContainer.innerHTML = customMessages.length
+      ? customMessages
+          .map(
+            (m) => `<div class="settings-item">
+              <div class="settings-item-info">
+                <strong>#${String(m.msg_number).padStart(2, "0")} — ${esc(m.title)}</strong>
+                <span class="tiny">${esc(m.content)}</span>
+              </div>
+              <div class="settings-item-actions">
+                <button type="button" class="table-action" data-edit-msg="${esc(m.id || "")}">Editar</button>
+                <button type="button" class="table-action del-inline" data-del-msg="${esc(m.id || "")}" data-msg-title="${esc(m.title)}">Excluir</button>
+              </div>
+            </div>`
+          )
+          .join("")
+      : '<div class="empty">Nenhuma mensagem cadastrada.</div>';
+  }
+}
+
+async function handleAddStatus(e) {
+  e.preventDefault();
+  const name = sanitizeText($("new-status-name").value);
+  if (!name) return;
+
+  if (getStatusNames().some((s) => s.toLowerCase() === name.toLowerCase())) {
+    toast("Já existe um status com esse nome.");
+    return;
+  }
+
+  try {
+    const activeUser = await ensureActiveUser();
+    const { error } = await db.from("custom_statuses").insert({
+      user_id: activeUser.id,
+      name,
+      position: customStatuses.length
+    });
+    if (error) throw error;
+
+    $("new-status-name").value = "";
+    toast(`Status "${name}" adicionado!`);
+    await loadCustomSettings();
+  } catch (err) {
+    toast("Erro ao adicionar status: " + translateSupabaseError(err));
+  }
+}
+
+async function handleAddDevelopment(e) {
+  e.preventDefault();
+  const name = sanitizeText($("new-dev-name").value);
+  if (!name) return;
+
+  if (getDevelopmentNames().some((d) => d.toLowerCase() === name.toLowerCase())) {
+    toast("Já existe um empreendimento com esse nome.");
+    return;
+  }
+
+  try {
+    const activeUser = await ensureActiveUser();
+    const { error } = await db.from("custom_developments").insert({
+      user_id: activeUser.id,
+      name,
+      is_default: customDevelopments.length === 0
+    });
+    if (error) throw error;
+
+    $("new-dev-name").value = "";
+    toast(`Empreendimento "${name}" adicionado!`);
+    await loadCustomSettings();
+  } catch (err) {
+    toast("Erro ao adicionar empreendimento: " + translateSupabaseError(err));
+  }
+}
+
+function openMessageEditor(msgObj = null) {
+  $("message-editor-form").reset();
+  $("msg-editor-error").textContent = "";
+  $("msg-edit-id").value = msgObj?.id || "";
+  $("msg-editor-title").textContent = msgObj ? "Editar mensagem" : "Nova mensagem";
+
+  const nextNum =
+    customMessages.reduce((max, m) => Math.max(max, Number(m.msg_number) || 0), 0) + 1;
+
+  $("msg-edit-number").value = msgObj?.msg_number || nextNum;
+  $("msg-edit-title").value = msgObj?.title || "";
+  $("msg-edit-content").value = msgObj?.content || "Olá, [NOME]! ";
+  $("message-editor-dialog").showModal();
+}
+
+async function handleSaveMessageEditor(e) {
+  e.preventDefault();
+  const errEl = $("msg-editor-error");
+  const btn = $("save-msg-editor-btn");
+  errEl.textContent = "";
+
+  const id = $("msg-edit-id").value.trim();
+  const msgNumber = Number($("msg-edit-number").value) || 1;
+  const title = sanitizeText($("msg-edit-title").value);
+  const content = String($("msg-edit-content").value || "").trim();
+
+  if (!title || !content) {
+    errEl.textContent = "Preencha o título e o texto da mensagem.";
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Salvando...";
+
+  try {
+    const activeUser = await ensureActiveUser();
+    const payload = {
+      user_id: activeUser.id,
+      msg_number: msgNumber,
+      title,
+      content
+    };
+
+    let res;
+    if (id) {
+      res = await db
+        .from("custom_messages")
+        .update(payload)
+        .eq("id", id)
+        .eq("user_id", activeUser.id);
+    } else {
+      res = await db.from("custom_messages").insert(payload);
+    }
+
+    if (res.error) throw res.error;
+
+    $("message-editor-dialog").close();
+    toast(id ? "Mensagem atualizada!" : "Nova mensagem salva!");
+    await loadCustomSettings();
+    renderMessages();
+  } catch (err) {
+    errEl.textContent = "Erro ao salvar: " + translateSupabaseError(err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Salvar mensagem";
+  }
+}
+
+/* =========================================================================
+   CADASTRO E EDIÇÃO DE LEAD
+   ========================================================================= */
+
 function openLeadForm(lead = null) {
+  syncAllDynamicSelects();
   const formEl = $("lead-form");
   formEl.reset();
   $("lead-error").textContent = "";
@@ -530,10 +906,21 @@ function openLeadForm(lead = null) {
   $("dialog-title").textContent = lead ? "Editar lead" : "Novo lead";
   $("lead-name").value = lead?.name || "";
   $("lead-phone").value = lead?.phone || "";
-  $("lead-development").value = VALID_DEVELOPMENTS.includes(lead?.development)
-    ? lead.development
-    : "Dom Parque";
-  $("lead-status").value = VALID_STATUSES.includes(lead?.status) ? lead.status : "Pendente";
+
+  const devSelect = $("lead-development");
+  const targetDev = lead?.development || getDefaultDevelopmentName();
+  if (targetDev && ![...devSelect.options].some((o) => o.value === targetDev)) {
+    devSelect.insertAdjacentHTML("beforeend", `<option value="${esc(targetDev)}">${esc(targetDev)}</option>`);
+  }
+  devSelect.value = targetDev;
+
+  const statusSelect = $("lead-status");
+  const targetStatus = lead?.status || getStatusNames()[0] || "Pendente";
+  if (targetStatus && ![...statusSelect.options].some((o) => o.value === targetStatus)) {
+    statusSelect.insertAdjacentHTML("beforeend", `<option value="${esc(targetStatus)}">${esc(targetStatus)}</option>`);
+  }
+  statusSelect.value = targetStatus;
+
   $("lead-modality").value = lead?.preferred_modality || "";
   $("lead-next-date").value = lead?.next_action_date || "";
   $("lead-notes").value = lead?.notes || "";
@@ -587,8 +974,8 @@ async function saveLead(e) {
       user_id: activeUser.id,
       name,
       phone: normalizePhoneForStorage(rawPhone),
-      development: $("lead-development").value || "Dom Parque",
-      status: $("lead-status").value || "Pendente",
+      development: $("lead-development").value || getDefaultDevelopmentName(),
+      status: $("lead-status").value || getStatusNames()[0] || "Pendente",
       preferred_modality: $("lead-modality").value || null,
       next_action_date: $("lead-next-date").value || null,
       notes: sanitizeText($("lead-notes").value) || null
@@ -613,12 +1000,6 @@ async function saveLead(e) {
 
     if (result.error) {
       errEl.textContent = "Erro ao salvar no Supabase: " + translateSupabaseError(result.error);
-      console.error("Erro Supabase saveLead:", result.error);
-      return;
-    }
-
-    if (!result.data) {
-      errEl.textContent = "O banco não retornou o registro salvo. Verifique as políticas RLS da tabela leads.";
       return;
     }
 
@@ -633,12 +1014,15 @@ async function saveLead(e) {
     await loadLeads();
   } catch (err) {
     errEl.textContent = "Falha inesperada: " + translateSupabaseError(err);
-    console.error("Exceção saveLead:", err);
   } finally {
     btn.disabled = false;
     btn.textContent = "Salvar lead";
   }
 }
+
+/* =========================================================================
+   EXCLUSÃO E AÇÕES EM LOTE
+   ========================================================================= */
 
 function openDeleteConfirm(leadIds) {
   const ids = Array.isArray(leadIds) ? leadIds : [leadIds];
@@ -689,10 +1073,7 @@ async function executePermanentDelete() {
   const btn = $("confirm-delete-btn");
   errEl.textContent = "";
 
-  if (!leadsPendingDeletion.length) {
-    errEl.textContent = "Nenhum contato selecionado para exclusão.";
-    return;
-  }
+  if (!leadsPendingDeletion.length) return;
 
   const targets = [...leadsPendingDeletion];
   const targetIds = targets.map((t) => t.id);
@@ -712,10 +1093,7 @@ async function executePermanentDelete() {
         .delete()
         .in("lead_id", sliceIds)
         .eq("user_id", activeUser.id);
-
-      if (histErr) {
-        throw histErr;
-      }
+      if (histErr) throw histErr;
 
       const { data: deletedRows, error: delErr } = await db
         .from("leads")
@@ -723,27 +1101,16 @@ async function executePermanentDelete() {
         .in("id", sliceIds)
         .eq("user_id", activeUser.id)
         .select("id");
-
-      if (delErr) {
-        throw delErr;
-      }
+      if (delErr) throw delErr;
 
       totalDeleted += deletedRows?.length || 0;
     }
 
-    if (totalDeleted === 0) {
-      throw new Error("Nenhum contato pôde ser excluído. Verifique as permissões RLS.");
-    }
-
     $("delete-confirm-dialog").close();
     const detailDlg = $("detail-dialog");
-    if (detailDlg && detailDlg.open) {
-      detailDlg.close();
-    }
+    if (detailDlg && detailDlg.open) detailDlg.close();
 
-    for (const id of targetIds) {
-      selectedLeadIds.delete(id);
-    }
+    for (const id of targetIds) selectedLeadIds.delete(id);
     leadsPendingDeletion = [];
     selectedLead = null;
 
@@ -755,7 +1122,6 @@ async function executePermanentDelete() {
     await loadLeads();
   } catch (err) {
     errEl.textContent = "Erro ao excluir: " + translateSupabaseError(err);
-    console.error("Erro exclusão permanente:", err);
   } finally {
     btn.disabled = false;
     btn.textContent = "Sim, excluir definitivamente";
@@ -784,16 +1150,11 @@ async function executeBulkArchiveToggle(nextArchived) {
         .in("id", slice)
         .eq("user_id", activeUser.id)
         .select("id");
-
       if (error) throw error;
       updatedCount += data?.length || 0;
     }
 
-    await addHistoryBatch(
-      ids,
-      nextArchived ? "Lead arquivado em lote" : "Lead restaurado em lote"
-    );
-
+    await addHistoryBatch(ids, nextArchived ? "Lead arquivado em lote" : "Lead restaurado em lote");
     selectedLeadIds.clear();
     toast(
       nextArchived
@@ -812,9 +1173,12 @@ async function executeBulkArchiveToggle(nextArchived) {
 async function executeBulkStatusUpdate() {
   const ids = [...selectedLeadIds];
   const nextStatus = $("bulk-status-select").value;
-  if (!ids.length) return;
-  if (!nextStatus || !VALID_STATUSES.includes(nextStatus)) {
-    toast("Escolha um status válido antes de aplicar.");
+  if (!ids.length) {
+    toast("Selecione ao menos um contato.");
+    return;
+  }
+  if (!nextStatus) {
+    toast("Escolha um status antes de aplicar.");
     return;
   }
 
@@ -840,17 +1204,11 @@ async function executeBulkStatusUpdate() {
         .in("id", slice)
         .eq("user_id", activeUser.id)
         .select("id");
-
       if (error) throw error;
       updatedCount += data?.length || 0;
     }
 
-    await addHistoryBatch(
-      ids,
-      "Status alterado em lote",
-      `Novo status: ${nextStatus}`
-    );
-
+    await addHistoryBatch(ids, "Status alterado em lote", `Novo status: ${nextStatus}`);
     $("bulk-status-select").value = "";
     selectedLeadIds.clear();
     toast(`Status "${nextStatus}" aplicado a ${updatedCount} contato(s).`);
@@ -862,6 +1220,56 @@ async function executeBulkStatusUpdate() {
     btn.textContent = "Aplicar status";
   }
 }
+
+async function executeBulkDevelopmentUpdate() {
+  const ids = [...selectedLeadIds];
+  const nextDev = $("bulk-dev-select").value;
+  if (!ids.length) {
+    toast("Selecione ao menos um contato.");
+    return;
+  }
+  if (!nextDev) {
+    toast("Escolha um empreendimento antes de aplicar.");
+    return;
+  }
+
+  const btn = $("bulk-apply-dev-btn");
+  btn.disabled = true;
+  btn.textContent = "Aplicando...";
+
+  try {
+    const activeUser = await ensureActiveUser();
+    const chunkSize = 100;
+    let updatedCount = 0;
+
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const slice = ids.slice(i, i + chunkSize);
+      const { data, error } = await db
+        .from("leads")
+        .update({ development: nextDev })
+        .in("id", slice)
+        .eq("user_id", activeUser.id)
+        .select("id");
+      if (error) throw error;
+      updatedCount += data?.length || 0;
+    }
+
+    await addHistoryBatch(ids, "Empreendimento alterado em lote", `Novo empreendimento: ${nextDev}`);
+    $("bulk-dev-select").value = "";
+    selectedLeadIds.clear();
+    toast(`Empreendimento "${nextDev}" aplicado a ${updatedCount} contato(s).`);
+    await loadLeads();
+  } catch (err) {
+    toast("Erro ao atualizar empreendimento em lote: " + translateSupabaseError(err));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Aplicar empreend.";
+  }
+}
+
+/* =========================================================================
+   FICHA DE DETALHES DO LEAD
+   ========================================================================= */
 
 async function openLeadDetails(id) {
   selectedLead = leads.find((x) => x.id === id);
@@ -883,18 +1291,19 @@ async function openLeadDetails(id) {
     .join("");
 
   const msgSelect = $("detail-msg-select");
-  msgSelect.innerHTML = MESSAGES.map(
-    (m, idx) => `<option value="${idx}">${String(m[0]).padStart(2, "0")} — ${esc(m[1])}</option>`
+  msgSelect.innerHTML = customMessages.map(
+    (m, idx) => `<option value="${idx}">${String(m.msg_number).padStart(2, "0")} — ${esc(m.title)}</option>`
   ).join("");
 
   const updatePreview = () => {
     const idx = Number(msgSelect.value) || 0;
-    $("detail-msg-preview").textContent = adaptMessageForLead(MESSAGES[idx][2], l);
+    const raw = customMessages[idx]?.content || DEFAULT_MESSAGES[0][2];
+    $("detail-msg-preview").textContent = adaptMessageForLead(raw, l);
   };
   msgSelect.onchange = updatePreview;
   updatePreview();
 
-  $("detail-whatsapp").textContent = "Abrir no App WhatsApp";
+  $("detail-whatsapp").textContent = "Abrir App WhatsApp";
   $("detail-whatsapp").onclick = () => {
     const idx = Number(msgSelect.value) || 0;
     openWhatsAppForLead(l, idx);
@@ -903,10 +1312,11 @@ async function openLeadDetails(id) {
   $("detail-sent").onclick = async () => {
     try {
       const activeUser = await ensureActiveUser();
+      const sentStatus = getStatusNames().find((s) => /mensagem enviada/i.test(s)) || "Mensagem enviada";
       const { error } = await db
         .from("leads")
         .update({
-          status: "Mensagem enviada",
+          status: sentStatus,
           last_contacted_at: new Date().toISOString()
         })
         .eq("id", l.id)
@@ -919,7 +1329,7 @@ async function openLeadDetails(id) {
 
       await addHistory(l.id, "Mensagem marcada como enviada", "Confirmação manual após envio no WhatsApp.");
       $("detail-dialog").close();
-      toast("Status atualizado para Mensagem enviada.");
+      toast(`Status atualizado para ${sentStatus}.`);
       await loadLeads();
     } catch (err) {
       toast("Erro inesperado ao atualizar status: " + translateSupabaseError(err));
@@ -956,9 +1366,7 @@ async function openLeadDetails(id) {
     }
   };
 
-  $("detail-delete").onclick = () => {
-    openDeleteConfirm([l.id]);
-  };
+  $("detail-delete").onclick = () => openDeleteConfirm([l.id]);
 
   $("detail-history").innerHTML = '<p class="tiny">Carregando histórico...</p>';
   $("detail-dialog").showModal();
@@ -992,6 +1400,10 @@ async function openLeadDetails(id) {
   }
 }
 
+/* =========================================================================
+   DIAGNÓSTICO E IMPORTAÇÃO EM MASSA
+   ========================================================================= */
+
 async function runDatabaseDiagnostics() {
   const box = $("diagnostics-results");
   const btn = $("run-diagnostics-btn");
@@ -1019,52 +1431,22 @@ async function runDatabaseDiagnostics() {
     pushCheck("1. Cliente Supabase", true, "Instância conectada à URL configurada.");
 
     const activeUser = await ensureActiveUser();
-    pushCheck("2. Autenticação e Sessão", true, `Autenticado como ${activeUser.email} (ID: ${activeUser.id}).`);
+    pushCheck("2. Autenticação e Sessão", true, `Autenticado como ${activeUser.email}.`);
 
     const allLeads = await fetchAllUserLeadsFromDb();
     const activeCount = allLeads.filter((l) => !l.archived).length;
     const archCount = allLeads.filter((l) => l.archived).length;
     pushCheck(
-      "3. Leitura completa na tabela leads",
+      "3. Tabela leads",
       true,
       `Total no banco: ${allLeads.length} contatos (${activeCount} ativos, ${archCount} arquivados).`
     );
 
-    const testPayload = {
-      user_id: activeUser.id,
-      name: "__TESTE_DIAGNOSTICO_CRM__",
-      phone: "(11) 90000-0000",
-      development: "Outro",
-      status: "Pendente",
-      notes: "Registro temporário de verificação de persistência."
-    };
-
-    const { data: insData, error: insErr } = await db
-      .from("leads")
-      .insert(testPayload)
-      .select()
-      .single();
-
-    if (insErr || !insData?.id) {
-      pushCheck("4. Gravação e Políticas RLS (INSERT)", false, translateSupabaseError(insErr));
-      return;
-    }
-    pushCheck("4. Gravação e Políticas RLS (INSERT)", true, `Registro gravado com sucesso (ID: ${insData.id}).`);
-
-    const { data: verifyData, error: verifyErr } = await db
-      .from("leads")
-      .select("id, name, user_id")
-      .eq("id", insData.id)
-      .single();
-
-    if (verifyErr || !verifyData) {
-      pushCheck("5. Confirmação de Persistência", false, "Registro gravado, mas não pôde ser relido.");
-    } else {
-      pushCheck("5. Confirmação de Persistência", true, "Persistência confirmada no PostgreSQL/Supabase.");
-    }
-
-    await db.from("leads").delete().eq("id", insData.id).eq("user_id", activeUser.id);
-    pushCheck("6. Limpeza do Teste (DELETE)", true, "Registro temporário de diagnóstico removido automaticamente.");
+    pushCheck(
+      "4. Tabelas de personalização",
+      true,
+      `${customStatuses.length} status, ${customDevelopments.length} empreendimentos e ${customMessages.length} mensagens sincronizadas no Supabase.`
+    );
   } catch (err) {
     pushCheck("Erro inesperado", false, translateSupabaseError(err));
   } finally {
@@ -1118,9 +1500,7 @@ function handleFileUpload(e) {
 
       try {
         leads = await fetchAllUserLeadsFromDb();
-      } catch (syncErr) {
-        console.warn("Aviso ao sincronizar leads na abertura:", syncErr);
-      }
+      } catch {}
 
       const sheetSelect = $("import-sheet-select");
       sheetSelect.innerHTML = sheetNames
@@ -1188,6 +1568,10 @@ function buildPreparedImportList(currentDbLeads) {
   const colNotes = $("map-notes").value;
   const archiveDiscarded = $("import-archive-discarded").checked;
 
+  const validStatuses = getStatusNames();
+  const validDevs = getDevelopmentNames();
+  const defaultDev = getDefaultDevelopmentName();
+
   const existingMap = new Map();
   for (const item of currentDbLeads) {
     const d = phoneDigits(item.phone);
@@ -1206,20 +1590,23 @@ function buildPreparedImportList(currentDbLeads) {
     const formattedPhone = normalizePhoneForStorage(rawPhone);
 
     const rawDev = sanitizeText(row[colDev]);
-    let development = "Dom Parque";
-    if (/barueri/i.test(rawDev)) development = "Dom Barueri";
-    else if (/parque/i.test(rawDev)) development = "Dom Parque";
-    else if (rawDev) development = "Outro";
+    const matchedDev = validDevs.find((d) => d.toLowerCase() === rawDev.toLowerCase());
+    let development = matchedDev || defaultDev;
+    if (!matchedDev) {
+      if (/barueri/i.test(rawDev) && validDevs.includes("Dom Barueri")) development = "Dom Barueri";
+      else if (/parque/i.test(rawDev) && validDevs.includes("Dom Parque")) development = "Dom Parque";
+      else if (rawDev && validDevs.includes("Outro")) development = "Outro";
+    }
 
     const rawStatus = sanitizeText(row[colStatus]);
-    const status = VALID_STATUSES.includes(rawStatus) ? rawStatus : "Pendente";
+    const status = validStatuses.includes(rawStatus) ? rawStatus : (validStatuses[0] || "Pendente");
 
     const prevStatus = sanitizeText(row[colPrev]);
     const rawNotes = sanitizeText(row[colNotes]);
 
     const noteParts = [];
     if (prevStatus) noteParts.push(`Situação anterior no app: ${prevStatus}`);
-    if (rawDev && !["Dom Parque", "Dom Barueri"].includes(rawDev)) noteParts.push(`Lista original: ${rawDev}`);
+    if (rawDev && !validDevs.includes(rawDev)) noteParts.push(`Lista original: ${rawDev}`);
     if (rawNotes) noteParts.push(rawNotes);
     const notes = noteParts.length ? sanitizeText(noteParts.join(" | ")) : null;
 
@@ -1393,30 +1780,26 @@ async function executeBatchImport() {
 
       if (!error && data && data.length > 0) {
         insertedAll.push(...data);
-
         const historyRows = data.map((item) => ({
           lead_id: item.id,
           user_id: activeUser.id,
           action: "Lead importado em lote",
           details: `Importação via planilha (${item.development}${item.archived ? " - Arquivado" : ""})`
         }));
-
         await db.from("lead_history").insert(historyRows);
       } else {
         for (const item of slice) {
-          const singlePayload = {
-            user_id: activeUser.id,
-            name: item.name,
-            phone: item.phone,
-            development: item.development,
-            status: item.status,
-            notes: item.notes,
-            archived: item.archived
-          };
-
           const singleRes = await db
             .from("leads")
-            .insert(singlePayload)
+            .insert({
+              user_id: activeUser.id,
+              name: item.name,
+              phone: item.phone,
+              development: item.development,
+              status: item.status,
+              notes: item.notes,
+              archived: item.archived
+            })
             .select("id, name, development, archived")
             .single();
 
@@ -1459,39 +1842,10 @@ async function executeBatchImport() {
         <li><b>Total de linhas identificadas na planilha:</b> ${list.length}</li>
         <li><b>Contatos válidos aptos para importar:</b> ${toInsert.length}</li>
         <li><b>Contatos gravados com sucesso no Supabase:</b> ${insertedAll.length} (${importedActiveCount} ativos e ${importedArchivedCount} arquivados)</li>
-        <li><b>Duplicados já existentes no banco (ativos ou arquivados):</b> ${dupDbRows.length}</li>
-        <li><b>Duplicados dentro da própria planilha:</b> ${dupSheetRows.length}</li>
-        <li><b>Ignorados por dados ausentes ou inválidos:</b> ${invalidRows.length}</li>
-        ${hasRowErrors ? `<li><b>Registros rejeitados pelo banco:</b> ${failedRows.length}</li>` : ""}
+        <li><b>Duplicados já existentes no banco:</b> ${dupDbRows.length}</li>
+        <li><b>Duplicados dentro da planilha:</b> ${dupSheetRows.length}</li>
+        <li><b>Ignorados por dados inválidos:</b> ${invalidRows.length}</li>
       </ul>
-      ${
-        hasRowErrors
-          ? `<div class="error" style="margin-bottom:0.75rem">
-              <b>Motivo detalhado das linhas rejeitadas:</b>
-              <ul>
-                ${failedRows
-                  .map(
-                    (f) => `<li>Linha ${f.rowNum}: <b>${esc(f.name)}</b> (${esc(f.phone)}) — ${esc(f.reason)}</li>`
-                  )
-                  .join("")}
-              </ul>
-            </div>`
-          : ""
-      }
-      ${
-        dupDbRows.length + dupSheetRows.length + invalidRows.length > 0
-          ? `<details>
-              <summary>Ver detalhes dos ${dupDbRows.length + dupSheetRows.length + invalidRows.length} contatos não importados</summary>
-              <ul>
-                ${[...dupDbRows, ...dupSheetRows, ...invalidRows]
-                  .map(
-                    (s) => `<li>Linha ${s.rowNum}: <b>${esc(s.name || "Sem nome")}</b> (${esc(s.phone || "Sem tel.")}) — ${esc(s.skipReason)}</li>`
-                  )
-                  .join("")}
-              </ul>
-            </details>`
-          : ""
-      }
     `;
 
     if (insertedAll.length > 0) {
@@ -1500,12 +1854,15 @@ async function executeBatchImport() {
   } catch (err) {
     progressEl.classList.add("hidden");
     errEl.textContent = "Falha durante a importação: " + translateSupabaseError(err);
-    console.error("Erro importação:", err);
   } finally {
     btn.disabled = false;
     btn.textContent = "Confirmar e importar contatos";
   }
 }
+
+/* =========================================================================
+   CONEXÃO E EVENTOS
+   ========================================================================= */
 
 async function connectSupabase(url, key) {
   const cleanUrl = String(url || "").trim().replace(/\/+$/, "");
@@ -1553,6 +1910,7 @@ async function enterAuthenticatedApp() {
     const activeUser = await ensureActiveUser();
     $("user-email").textContent = activeUser.email || "Usuário conectado";
     showScreen("app-screen");
+    await loadCustomSettings();
     await loadLeads(true);
   } catch {
     showScreen("login-screen");
@@ -1612,8 +1970,6 @@ function bindEvents() {
   $("change-supabase-btn").onclick = () => {
     localStorage.removeItem("crm_url");
     localStorage.removeItem("crm_key");
-    sessionStorage.removeItem("crm_url");
-    sessionStorage.removeItem("crm_key");
     showScreen("config-screen");
   };
 
@@ -1631,6 +1987,147 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-goto]").forEach((b) => {
     b.onclick = () => switchView(b.dataset.goto);
+  });
+
+  // Sub-abas de Configurações
+  document.querySelectorAll(".settings-tab").forEach((t) => {
+    t.onclick = () => switchSettingsTab(t.dataset.stab);
+  });
+
+  $("goto-manage-messages-btn").onclick = () => {
+    switchView("settings");
+    switchSettingsTab("messages");
+  };
+
+  $("add-status-form").addEventListener("submit", handleAddStatus);
+  $("add-dev-form").addEventListener("submit", handleAddDevelopment);
+  $("open-new-msg-modal-btn").onclick = () => openMessageEditor(null);
+  $("message-editor-form").addEventListener("submit", handleSaveMessageEditor);
+
+  document.querySelectorAll("[data-insert-var]").forEach((btn) => {
+    btn.onclick = () => {
+      const ta = $("msg-edit-content");
+      const v = btn.dataset.insertVar;
+      const start = ta.selectionStart ?? ta.value.length;
+      const end = ta.selectionEnd ?? ta.value.length;
+      ta.value = ta.value.slice(0, start) + v + ta.value.slice(end);
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = start + v.length;
+    };
+  });
+
+  // Ações nas listas de Configurações (Editar / Excluir / Padrão)
+  $("settings-view").addEventListener("click", async (e) => {
+    const activeUser = await ensureActiveUser().catch(() => null);
+    if (!activeUser) return;
+
+    // Renomear Status
+    const editSt = e.target.closest("[data-edit-status]");
+    if (editSt) {
+      const id = editSt.dataset.editStatus;
+      const oldName = editSt.dataset.stName;
+      const newName = sanitizeText(prompt("Novo nome para o status:", oldName));
+      if (!newName || newName === oldName) return;
+      if (id) {
+        await db.from("custom_statuses").update({ name: newName }).eq("id", id).eq("user_id", activeUser.id);
+      }
+      await db.from("leads").update({ status: newName }).eq("status", oldName).eq("user_id", activeUser.id);
+      toast("Status atualizado!");
+      await loadCustomSettings();
+      await loadLeads();
+      return;
+    }
+
+    // Excluir Status
+    const delSt = e.target.closest("[data-del-status]");
+    if (delSt) {
+      const id = delSt.dataset.delStatus;
+      const stName = delSt.dataset.stName;
+      if (customStatuses.length <= 1) {
+        toast("Você precisa manter pelo menos 1 status cadastrado.");
+        return;
+      }
+      if (!confirm(`Excluir o status "${stName}"?`)) return;
+      if (id) {
+        await db.from("custom_statuses").delete().eq("id", id).eq("user_id", activeUser.id);
+      }
+      toast("Status excluído.");
+      await loadCustomSettings();
+      return;
+    }
+
+    // Definir empreendimento padrão
+    const defDev = e.target.closest("[data-default-dev]");
+    if (defDev) {
+      const id = defDev.dataset.defaultDev;
+      await db.from("custom_developments").update({ is_default: false }).eq("user_id", activeUser.id);
+      await db.from("custom_developments").update({ is_default: true }).eq("id", id).eq("user_id", activeUser.id);
+      toast("Empreendimento padrão atualizado!");
+      await loadCustomSettings();
+      return;
+    }
+
+    // Renomear Empreendimento
+    const editDev = e.target.closest("[data-edit-dev]");
+    if (editDev) {
+      const id = editDev.dataset.editDev;
+      const oldName = editDev.dataset.devName;
+      const newName = sanitizeText(prompt("Novo nome para o empreendimento:", oldName));
+      if (!newName || newName === oldName) return;
+      if (id) {
+        await db.from("custom_developments").update({ name: newName }).eq("id", id).eq("user_id", activeUser.id);
+      }
+      await db.from("leads").update({ development: newName }).eq("development", oldName).eq("user_id", activeUser.id);
+      toast("Empreendimento atualizado!");
+      await loadCustomSettings();
+      await loadLeads();
+      return;
+    }
+
+    // Excluir Empreendimento
+    const delDev = e.target.closest("[data-del-dev]");
+    if (delDev) {
+      const id = delDev.dataset.delDev;
+      const devName = delDev.dataset.devName;
+      if (customDevelopments.length <= 1) {
+        toast("Você precisa manter pelo menos 1 empreendimento.");
+        return;
+      }
+      if (!confirm(`Excluir o empreendimento "${devName}"?`)) return;
+      if (id) {
+        await db.from("custom_developments").delete().eq("id", id).eq("user_id", activeUser.id);
+      }
+      toast("Empreendimento excluído.");
+      await loadCustomSettings();
+      return;
+    }
+
+    // Editar Mensagem
+    const editMsg = e.target.closest("[data-edit-msg]");
+    if (editMsg) {
+      const id = editMsg.dataset.editMsg;
+      const msgObj = customMessages.find((m) => m.id === id);
+      if (msgObj) openMessageEditor(msgObj);
+      return;
+    }
+
+    // Excluir Mensagem
+    const delMsg = e.target.closest("[data-del-msg]");
+    if (delMsg) {
+      const id = delMsg.dataset.delMsg;
+      const title = delMsg.dataset.msgTitle;
+      if (customMessages.length <= 1) {
+        toast("Mantenha pelo menos 1 mensagem na biblioteca.");
+        return;
+      }
+      if (!confirm(`Excluir a mensagem "${title}"?`)) return;
+      if (id) {
+        await db.from("custom_messages").delete().eq("id", id).eq("user_id", activeUser.id);
+      }
+      toast("Mensagem excluída.");
+      await loadCustomSettings();
+      renderMessages();
+    }
   });
 
   $("new-lead-top").onclick = () => openLeadForm(null);
@@ -1666,6 +2163,15 @@ function bindEvents() {
     renderLeads();
   });
 
+  // Modo "Marcar contatos"
+  $("toggle-selection-mode-btn").addEventListener("click", () => {
+    setSelectionMode(!selectionMode);
+  });
+
+  $("exit-selection-mode-btn").addEventListener("click", () => {
+    setSelectionMode(false);
+  });
+
   $("bulk-select-all-filtered").addEventListener("click", () => {
     for (const item of currentFilteredLeads) {
       selectedLeadIds.add(item.id);
@@ -1679,6 +2185,7 @@ function bindEvents() {
   });
 
   $("bulk-apply-status-btn").addEventListener("click", executeBulkStatusUpdate);
+  $("bulk-apply-dev-btn").addEventListener("click", executeBulkDevelopmentUpdate);
   $("bulk-archive-btn").addEventListener("click", () => executeBulkArchiveToggle(true));
   $("bulk-restore-btn").addEventListener("click", () => executeBulkArchiveToggle(false));
   $("bulk-delete-btn").addEventListener("click", () => {
@@ -1689,13 +2196,9 @@ function bindEvents() {
     if (e.target.id === "select-all-visible-checkbox") {
       const visibleSlice = currentFilteredLeads.slice(0, visibleLeadsLimit);
       if (e.target.checked) {
-        for (const item of visibleSlice) {
-          selectedLeadIds.add(item.id);
-        }
+        for (const item of visibleSlice) selectedLeadIds.add(item.id);
       } else {
-        for (const item of visibleSlice) {
-          selectedLeadIds.delete(item.id);
-        }
+        for (const item of visibleSlice) selectedLeadIds.delete(item.id);
       }
       renderLeads();
       return;
@@ -1704,11 +2207,8 @@ function bindEvents() {
     const rowCheckbox = e.target.closest(".lead-row-checkbox");
     if (rowCheckbox) {
       const id = rowCheckbox.dataset.selectId;
-      if (rowCheckbox.checked) {
-        selectedLeadIds.add(id);
-      } else {
-        selectedLeadIds.delete(id);
-      }
+      if (rowCheckbox.checked) selectedLeadIds.add(id);
+      else selectedLeadIds.delete(id);
       renderLeads();
     }
   });
@@ -1735,12 +2235,12 @@ function bindEvents() {
 
   $("message-search").addEventListener("input", renderMessages);
   $("message-list").addEventListener("click", async (e) => {
-    const copyBtn = e.target.closest("[data-copy]");
+    const copyBtn = e.target.closest("[data-copy-idx]");
     if (!copyBtn) return;
-    const msg = MESSAGES.find((x) => x[0] === Number(copyBtn.dataset.copy));
+    const msg = customMessages[Number(copyBtn.dataset.copyIdx)];
     if (!msg) return;
     try {
-      await navigator.clipboard.writeText(msg[2]);
+      await navigator.clipboard.writeText(msg.content);
       toast("Mensagem copiada para a área de transferência!");
     } catch {
       toast("Não foi possível copiar automaticamente. Selecione e copie o texto.");
@@ -1777,8 +2277,6 @@ function bindEvents() {
     } catch {
       localStorage.removeItem("crm_url");
       localStorage.removeItem("crm_key");
-      sessionStorage.removeItem("crm_url");
-      sessionStorage.removeItem("crm_key");
       showScreen("config-screen");
     }
   } else {

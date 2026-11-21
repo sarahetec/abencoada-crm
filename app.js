@@ -25,7 +25,7 @@ const DEFAULT_MESSAGES = [
   [2, "Cliente interessado", "Olá, [NOME]! Que bom saber do seu interesse! 😊 Para organizar o melhor atendimento, gostaria de entender como prefere conhecer o empreendimento: presencialmente, por videochamada ou por telefone?"],
   [3, "Não pode visitar", "Olá, [NOME]! Sem problemas! 😊 Podemos conversar por telefone ou WhatsApp para eu te apresentar melhor o projeto. Qual seria o melhor horário para você?"],
   [4, "Oferecer horários", "Olá, [NOME]! Tenho algumas opções de horário para conversarmos: manhã (9h às 11h), horário de almoço (12h às 14h), tarde (15h às 17h) ou noite (18h às 20h). Qual período funciona melhor para você? Vou confirmar a disponibilidade antes de agendar."],
-  [5, "Prefere WhatsApp", "Olá, [NOME]! Claro! Podemos conversar por aqui mesmo. 😊 Gostaria de reservar alguns minutinhos para apresentar o projeto e entender o que você procura. Você consegue conversar hoje? Qual horário seria melhor?"],
+  [5, "Prefere WhatsApp", "Olá, [NOME]! Claro! Podemos conversar por here mesmo. 😊 Gostaria de reservar alguns minutinhos para apresentar o projeto e entender o que você procura. Você consegue conversar hoje? Qual horário seria melhor?"],
   [6, "Prefere telefone", "Olá, [NOME]! Perfeito! 😊 Para nossa ligação, você prefere o período da manhã ou da tarde? Assim consigo organizar o melhor horário."],
   [7, "Prefere videochamada", "Olá, [NOME]! Ótimo! Podemos fazer uma videochamada pelo WhatsApp para apresentar o empreendimento. Qual horário fica melhor para você?"],
   [8, "Sem tempo", "Olá, [NOME]! Entendo perfeitamente! Podemos fazer uma conversa rápida, de 5 a 10 minutos, só para apresentar os principais pontos. Qual período costuma ser mais tranquilo para você?"],
@@ -247,7 +247,7 @@ async function ensureActiveUser() {
 }
 
 /* =========================================================================
-   CARREGAMENTO E SINCRONIZAÇÃO DAS CONFIGURAÇÕES PERSONALIZADAS NO SUPABASE
+   CARREGAMENTO E SINCRONIZAÇÃO DAS CONFIGURAÇÕES NO SUPABASE
    ========================================================================= */
 
 async function loadCustomSettings() {
@@ -362,6 +362,71 @@ function syncAllDynamicSelects() {
 }
 
 /* =========================================================================
+   SUGESTÃO INTELIGENTE DE EMPREENDIMENTO (ADICIONADA)
+   ========================================================================= */
+
+function checkDevelopmentSuggestions(leadsList, pinnedDevelopments) {
+  const banner = $("development-suggestion-banner");
+  const suggestionText = $("suggestion-text");
+  const btnAccept = $("btn-accept-suggestion");
+  const btnDismiss = $("btn-dismiss-suggestion");
+
+  if (!banner || !suggestionText) return;
+
+  const counts = {};
+  leadsList.forEach(lead => {
+    const dev = (lead.development || "").trim();
+    if (dev && dev.toLowerCase() !== "outro") {
+      counts[dev] = (counts[dev] || 0) + 1;
+    }
+  });
+
+  const THRESHOLD = 10;
+  let candidateToSuggest = null;
+
+  for (const [devName, count] of Object.entries(counts)) {
+    const isAlreadyPinned = pinnedDevelopments.some(p => p.toLowerCase() === devName.toLowerCase());
+    if (count >= THRESHOLD && !isAlreadyPinned) {
+      candidateToSuggest = { name: devName, count: count };
+      break;
+    }
+  }
+
+  if (candidateToSuggest) {
+    suggestionText.innerHTML = `O empreendimento <strong>${candidateToSuggest.name}</strong> já possui <strong>${candidateToSuggest.count} leads</strong> cadastrados. Deseja transformá-lo em um empreendimento fixo?`;
+    banner.classList.remove("hidden");
+
+    if (btnAccept) {
+      btnAccept.onclick = async () => {
+        try {
+          const activeUser = await ensureActiveUser();
+          const { error } = await db.from("custom_developments").insert({
+            user_id: activeUser.id,
+            name: candidateToSuggest.name,
+            is_default: false
+          });
+          if (error) throw error;
+
+          banner.classList.add("hidden");
+          toast(`Empreendimento "${candidateToSuggest.name}" fixado com sucesso!`);
+          await loadCustomSettings();
+        } catch (err) {
+          toast("Erro ao fixar empreendimento: " + translateSupabaseError(err));
+        }
+      };
+    }
+
+    if (btnDismiss) {
+      btnDismiss.onclick = () => {
+        banner.classList.add("hidden");
+      };
+    }
+  } else {
+    banner.classList.add("hidden");
+  }
+}
+
+/* =========================================================================
    HISTÓRICO E LEITURA DE LEADS
    ========================================================================= */
 
@@ -436,6 +501,9 @@ async function loadLeads(resetPagination = false) {
     }
     renderDashboard();
     renderLeads();
+
+    // Dispara a verificação inteligente de novos empreendimentos
+    checkDevelopmentSuggestions(leads, getDevelopmentNames());
   } catch (err) {
     toast("Erro ao carregar contatos: " + translateSupabaseError(err));
     console.error("Erro loadLeads:", err);
@@ -700,7 +768,6 @@ function renderMessages() {
    ========================================================================= */
 
 function renderSettingsView() {
-  // 1. LISTA DE STATUS
   const stContainer = $("settings-statuses-list");
   if (stContainer) {
     stContainer.innerHTML = customStatuses.length
@@ -721,7 +788,6 @@ function renderSettingsView() {
       : '<div class="empty">Nenhum status cadastrado.</div>';
   }
 
-  // 2. LISTA DE EMPREENDIMENTOS
   const devContainer = $("settings-devs-list");
   if (devContainer) {
     devContainer.innerHTML = customDevelopments.length
@@ -749,7 +815,6 @@ function renderSettingsView() {
       : '<div class="empty">Nenhum empreendimento cadastrado.</div>';
   }
 
-  // 3. LISTA DE MENSAGENS EDITÁVEIS
   const msgContainer = $("settings-messages-list");
   if (msgContainer) {
     msgContainer.innerHTML = customMessages.length
@@ -1989,7 +2054,6 @@ function bindEvents() {
     b.onclick = () => switchView(b.dataset.goto);
   });
 
-  // Sub-abas de Configurações
   document.querySelectorAll(".settings-tab").forEach((t) => {
     t.onclick = () => switchSettingsTab(t.dataset.stab);
   });
@@ -2016,12 +2080,10 @@ function bindEvents() {
     };
   });
 
-  // Ações nas listas de Configurações (Editar / Excluir / Padrão)
   $("settings-view").addEventListener("click", async (e) => {
     const activeUser = await ensureActiveUser().catch(() => null);
     if (!activeUser) return;
 
-    // Renomear Status
     const editSt = e.target.closest("[data-edit-status]");
     if (editSt) {
       const id = editSt.dataset.editStatus;
@@ -2038,7 +2100,6 @@ function bindEvents() {
       return;
     }
 
-    // Excluir Status
     const delSt = e.target.closest("[data-del-status]");
     if (delSt) {
       const id = delSt.dataset.delStatus;
@@ -2056,7 +2117,6 @@ function bindEvents() {
       return;
     }
 
-    // Definir empreendimento padrão
     const defDev = e.target.closest("[data-default-dev]");
     if (defDev) {
       const id = defDev.dataset.defaultDev;
@@ -2067,7 +2127,6 @@ function bindEvents() {
       return;
     }
 
-    // Renomear Empreendimento
     const editDev = e.target.closest("[data-edit-dev]");
     if (editDev) {
       const id = editDev.dataset.editDev;
@@ -2084,7 +2143,6 @@ function bindEvents() {
       return;
     }
 
-    // Excluir Empreendimento
     const delDev = e.target.closest("[data-del-dev]");
     if (delDev) {
       const id = delDev.dataset.delDev;
@@ -2102,7 +2160,6 @@ function bindEvents() {
       return;
     }
 
-    // Editar Mensagem
     const editMsg = e.target.closest("[data-edit-msg]");
     if (editMsg) {
       const id = editMsg.dataset.editMsg;
@@ -2111,7 +2168,6 @@ function bindEvents() {
       return;
     }
 
-    // Excluir Mensagem
     const delMsg = e.target.closest("[data-del-msg]");
     if (delMsg) {
       const id = delMsg.dataset.delMsg;
@@ -2163,7 +2219,6 @@ function bindEvents() {
     renderLeads();
   });
 
-  // Modo "Marcar contatos"
   $("toggle-selection-mode-btn").addEventListener("click", () => {
     setSelectionMode(!selectionMode);
   });

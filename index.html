@@ -64,8 +64,9 @@
       <nav aria-label="Navegação principal">
         <button type="button" class="nav-btn active" data-view="dashboard">▦ <span>Visão geral</span></button>
         <button type="button" class="nav-btn" data-view="leads">♙ <span>Leads</span></button>
-        <button type="button" class="nav-btn" data-view="messages">✉ <span>Mensagens (20)</span></button>
-        <button type="button" class="nav-btn" data-view="diagnostics">⚙ <span>Diagnóstico DB</span></button>
+        <button type="button" class="nav-btn" data-view="messages">✉ <span id="nav-messages-label">Mensagens</span></button>
+        <button type="button" class="nav-btn" data-view="settings">⚙ <span>Configurações</span></button>
+        <button type="button" class="nav-btn" data-view="diagnostics">🩺 <span>Diagnóstico DB</span></button>
       </nav>
       <div class="sidebar-bottom">
         <span id="user-email" class="tiny" title="Usuário autenticado"></span>
@@ -124,20 +125,9 @@
           <input id="lead-search" type="search" placeholder="Pesquisar por nome ou telefone...">
           <select id="status-filter" aria-label="Filtrar por status">
             <option value="">Todos os status</option>
-            <option>Pendente</option>
-            <option>Mensagem enviada</option>
-            <option>Retornar depois</option>
-            <option>Visita marcada</option>
-            <option>Visita realizada</option>
-            <option>Sem resposta</option>
-            <option>Não tem interesse</option>
-            <option>Convertido</option>
           </select>
           <select id="development-filter" aria-label="Filtrar por empreendimento">
             <option value="">Todos os empreendimentos</option>
-            <option>Dom Parque</option>
-            <option>Dom Barueri</option>
-            <option>Outro</option>
           </select>
           <label class="check-label">
             <input id="show-archived" type="checkbox"> Mostrar arquivados
@@ -149,29 +139,31 @@
             <span id="leads-count-label" class="tiny">Carregando contatos...</span>
             <button type="button" id="clear-filters-btn" class="text-btn tiny-btn hidden">Limpar filtros</button>
           </div>
-          <button type="button" id="open-import-inline" class="text-btn">↥ Importar Excel / CSV</button>
+          <div class="summary-right">
+            <button type="button" id="toggle-selection-mode-btn" class="secondary small-btn">☑ Marcar contatos</button>
+            <button type="button" id="open-import-inline" class="text-btn">↥ Importar Excel / CSV</button>
+          </div>
         </div>
 
-        <!-- BARRA DE AÇÕES EM LOTE -->
+        <!-- BARRA DE AÇÕES EM LOTE (VISÍVEL NO MODO "MARCAR CONTATOS") -->
         <div id="bulk-actions-bar" class="bulk-bar hidden" role="region" aria-label="Ações para contatos selecionados">
           <div class="bulk-info">
             <strong id="bulk-selected-count">0 selecionado(s)</strong>
             <button type="button" id="bulk-select-all-filtered" class="text-btn tiny-btn hidden">Selecionar todos os filtrados</button>
             <button type="button" id="bulk-clear-selection" class="text-btn tiny-btn">Desmarcar</button>
+            <button type="button" id="exit-selection-mode-btn" class="text-btn tiny-btn">Sair da seleção</button>
           </div>
           <div class="bulk-controls">
             <select id="bulk-status-select" aria-label="Alterar status dos selecionados">
               <option value="">Alterar status para...</option>
-              <option value="Pendente">Pendente</option>
-              <option value="Mensagem enviada">Mensagem enviada</option>
-              <option value="Retornar depois">Retornar depois</option>
-              <option value="Visita marcada">Visita marcada</option>
-              <option value="Visita realizada">Visita realizada</option>
-              <option value="Sem resposta">Sem resposta</option>
-              <option value="Não tem interesse">Não tem interesse</option>
-              <option value="Convertido">Convertido</option>
             </select>
             <button type="button" id="bulk-apply-status-btn" class="secondary">Aplicar status</button>
+
+            <select id="bulk-dev-select" aria-label="Alterar empreendimento dos selecionados">
+              <option value="">Alterar empreendimento...</option>
+            </select>
+            <button type="button" id="bulk-apply-dev-btn" class="secondary">Aplicar empreend.</button>
+
             <button type="button" id="bulk-archive-btn" class="secondary">Arquivar</button>
             <button type="button" id="bulk-restore-btn" class="secondary hidden">Restaurar</button>
             <button type="button" id="bulk-delete-btn" class="danger-ghost">Excluir</button>
@@ -188,9 +180,72 @@
 
       <!-- VIEW: BIBLIOTECA DE MENSAGENS -->
       <section id="messages-view" class="view hidden">
-        <p class="muted intro">Pesquise pelo número ou pela situação para encontrar a mensagem ideal.</p>
+        <div class="panel-heading" style="margin-bottom: 1rem;">
+          <p class="muted intro" style="margin:0;">Pesquise pelo número, título ou texto. Use <code>[NOME]</code> e <code>[EMPREENDIMENTO]</code> para preenchimento automático.</p>
+          <button type="button" id="goto-manage-messages-btn" class="secondary">✎ Gerenciar mensagens</button>
+        </div>
         <input id="message-search" class="message-search" type="search" placeholder="Ex.: 1, primeira abordagem, sem tempo, visita...">
         <div id="message-list" class="message-grid"></div>
+      </section>
+
+      <!-- VIEW: CONFIGURAÇÕES DO CRM -->
+      <section id="settings-view" class="view hidden">
+        <div class="settings-tabs" role="tablist">
+          <button type="button" class="settings-tab active" data-stab="statuses">Status dos contatos</button>
+          <button type="button" class="settings-tab" data-stab="developments">Empreendimentos</button>
+          <button type="button" class="settings-tab" data-stab="messages">Gerenciar mensagens</button>
+        </div>
+
+        <!-- SUB-ABA: STATUS -->
+        <div id="stab-statuses" class="settings-pane">
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">FUNIL DE ATENDIMENTO</p>
+                <h2>Status personalizados</h2>
+              </div>
+            </div>
+            <p class="muted tiny">Adicione, renomeie ou remova etapas do atendimento. Tudo fica salvo no Supabase.</p>
+            <form id="add-status-form" class="inline-add-form">
+              <input id="new-status-name" type="text" maxlength="60" placeholder="Nome do novo status (ex.: Aguardando documentação)" required>
+              <button type="submit" class="primary">＋ Adicionar status</button>
+            </form>
+            <div id="settings-statuses-list" class="settings-list"></div>
+          </div>
+        </div>
+
+        <!-- SUB-ABA: EMPREENDIMENTOS -->
+        <div id="stab-developments" class="settings-pane hidden">
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">PORTFÓLIO</p>
+                <h2>Empreendimentos</h2>
+              </div>
+            </div>
+            <p class="muted tiny">Gerencie os empreendimentos disponíveis nos formulários e defina qual será selecionado por padrão ao criar um novo lead.</p>
+            <form id="add-dev-form" class="inline-add-form">
+              <input id="new-dev-name" type="text" maxlength="80" placeholder="Nome do empreendimento (ex.: Residencial Primavera)" required>
+              <button type="submit" class="primary">＋ Adicionar empreendimento</button>
+            </form>
+            <div id="settings-devs-list" class="settings-list"></div>
+          </div>
+        </div>
+
+        <!-- SUB-ABA: GERENCIAR MENSAGENS -->
+        <div id="stab-messages" class="settings-pane hidden">
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">ROTEIROS DE WHATSAPP</p>
+                <h2>Gerenciar biblioteca de mensagens</h2>
+              </div>
+              <button type="button" id="open-new-msg-modal-btn" class="primary">＋ Nova mensagem</button>
+            </div>
+            <p class="muted tiny">Dica: insira <code>[NOME]</code> para puxar automaticamente o primeiro nome do cliente e <code>[EMPREENDIMENTO]</code> para o nome do empreendimento dele.</p>
+            <div id="settings-messages-list" class="settings-list"></div>
+          </div>
+        </div>
       </section>
 
       <!-- VIEW: DIAGNÓSTICO DO BANCO DE DADOS -->
@@ -203,7 +258,7 @@
             </div>
             <button type="button" id="run-diagnostics-btn" class="primary">Executar verificação completa</button>
           </div>
-          <p class="muted intro">Valida conexão com o projeto Supabase, token do usuário autenticado, leitura na tabela <code>leads</code>, políticas RLS e gravação real com confirmação de persistência (e remoção automática do registro de teste).</p>
+          <p class="muted intro">Valida conexão com o projeto Supabase, token do usuário autenticado, leitura nas tabelas <code>leads</code> e configurações personalizadas.</p>
           <div id="diagnostics-results" class="diag-grid">
             <div class="empty">Clique em "Executar verificação completa" para testar o banco de dados.</div>
           </div>
@@ -234,24 +289,11 @@
         </div>
         <div class="field">
           <label for="lead-development">Empreendimento</label>
-          <select id="lead-development">
-            <option value="Dom Parque">Dom Parque</option>
-            <option value="Dom Barueri">Dom Barueri</option>
-            <option value="Outro">Outro</option>
-          </select>
+          <select id="lead-development"></select>
         </div>
         <div class="field">
           <label for="lead-status">Status</label>
-          <select id="lead-status">
-            <option value="Pendente">Pendente</option>
-            <option value="Mensagem enviada">Mensagem enviada</option>
-            <option value="Retornar depois">Retornar depois</option>
-            <option value="Visita marcada">Visita marcada</option>
-            <option value="Visita realizada">Visita realizada</option>
-            <option value="Sem resposta">Sem resposta</option>
-            <option value="Não tem interesse">Não tem interesse</option>
-            <option value="Convertido">Convertido</option>
-          </select>
+          <select id="lead-status"></select>
         </div>
         <div class="field">
           <label for="lead-modality">Preferência de contato</label>
@@ -280,6 +322,44 @@
     </form>
   </dialog>
 
+  <!-- MODAL: CRIAR / EDITAR MENSAGEM PERSONALIZADA -->
+  <dialog id="message-editor-dialog">
+    <form id="message-editor-form" novalidate>
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">BIBLIOTECA</p>
+          <h2 id="msg-editor-title">Nova mensagem</h2>
+        </div>
+        <button type="button" class="icon-btn" data-close="message-editor-dialog" aria-label="Fechar">×</button>
+      </div>
+      <input type="hidden" id="msg-edit-id">
+      <div class="form-grid">
+        <div class="field">
+          <label for="msg-edit-number">Ordem / Número *</label>
+          <input id="msg-edit-number" type="number" min="1" max="999" required placeholder="1">
+        </div>
+        <div class="field">
+          <label for="msg-edit-title">Título / Situação *</label>
+          <input id="msg-edit-title" type="text" maxlength="100" required placeholder="Ex.: Primeira abordagem">
+        </div>
+        <div class="field wide">
+          <div class="var-helpers">
+            <span class="tiny">Inserir variável automática:</span>
+            <button type="button" class="chip-btn" data-insert-var="[NOME]">+ [NOME]</button>
+            <button type="button" class="chip-btn" data-insert-var="[EMPREENDIMENTO]">+ [EMPREENDIMENTO]</button>
+          </div>
+          <label for="msg-edit-content">Texto da mensagem *</label>
+          <textarea id="msg-edit-content" rows="5" required placeholder="Olá, [NOME]! Tudo bem? 😊..."></textarea>
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="ghost" data-close="message-editor-dialog">Cancelar</button>
+        <button type="submit" id="save-msg-editor-btn" class="primary">Salvar mensagem</button>
+      </div>
+      <p id="msg-editor-error" class="error" role="alert"></p>
+    </form>
+  </dialog>
+
   <!-- MODAL: DETALHES DO LEAD + WHATSAPP + HISTÓRICO -->
   <dialog id="detail-dialog">
     <div class="dialog-heading">
@@ -293,10 +373,10 @@
     <div id="detail-content"></div>
 
     <div class="wa-composer">
-      <label for="detail-msg-select">Escolher mensagem para o WhatsApp (abre preenchida, sem envio automático)</label>
+      <label for="detail-msg-select">Escolher mensagem para o App WhatsApp (abre preenchida com o nome do cliente)</label>
       <div class="wa-composer-row">
         <select id="detail-msg-select"></select>
-        <button type="button" id="detail-whatsapp" class="whatsapp">Abrir WhatsApp</button>
+        <button type="button" id="detail-whatsapp" class="whatsapp">Abrir App WhatsApp</button>
       </div>
       <p id="detail-msg-preview" class="tiny wa-preview"></p>
     </div>

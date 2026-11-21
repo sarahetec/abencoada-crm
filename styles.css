@@ -475,6 +475,7 @@ tr:hover td {
   font-size: 0.88rem;
 }
 
+/* Status padrão e personalizados */
 .status {
   display: inline-block;
   padding: 0.25rem 0.65rem;
@@ -489,6 +490,8 @@ tr:hover td {
 .status.visita-marcada { background: #e8f5e9; color: var(--success); }
 .status.visita-realizada { background: #e0f2f1; color: #00695c; }
 .status.sem-resposta { background: #efebe9; color: #4e342e; }
+.status.sem-zap-—-somente-ligacao,
+.status.sem-zap---somente-ligacao { background: #fbe9e7; color: #b71c1c; }
 .status.nao-tem-interesse { background: var(--danger-bg); color: var(--danger); }
 .status.convertido { background: #fffde7; color: #fbc02d; }
 
@@ -592,6 +595,122 @@ tr:hover td {
   border-top: 1px solid #f4ece4;
   padding-top: 0.75rem;
   margin-top: auto;
+}
+
+/* Estilos adicionais para Configurações e Seletor */
+.summary-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.small-btn {
+  padding: 0.42rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.settings-tab {
+  background: #f4ece4;
+  color: #442914;
+  border: 1px solid #dccbb9;
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-tab.active {
+  background: #442914;
+  color: #fff;
+  border-color: #442914;
+}
+
+.inline-add-form {
+  display: flex;
+  gap: 0.6rem;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+
+.inline-add-form input {
+  flex: 1;
+  min-width: 220px;
+}
+
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  background: #fcf9f6;
+  border: 1px solid #e6d8ca;
+  border-radius: 10px;
+  flex-wrap: wrap;
+}
+
+.settings-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+  min-width: 200px;
+}
+
+.settings-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.badge-default {
+  display: inline-block;
+  background: #e4f3e8;
+  color: #1c6b36;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  margin-left: 0.4rem;
+}
+
+.var-helpers {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.chip-btn {
+  background: #f1e6db;
+  color: #442914;
+  border: 1px solid #d5bfa9;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chip-btn:hover {
+  background: #e5d3c2;
 }
 
 dialog {
